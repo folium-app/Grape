@@ -51,9 +51,6 @@ ScreenLayout screenLayout;
 }
 
 -(void) insertGame:(NSURL * _Nullable)url directBoot:(BOOL)directBoot {
-    Settings::directBoot = directBoot;
-    Settings::save();
-    
     NSURL *savesDirectory = [[[url URLByDeletingLastPathComponent] URLByDeletingLastPathComponent] URLByAppendingPathComponent:@"saves"];
     NSString *gameName = [url.lastPathComponent stringByReplacingOccurrencesOfString:url.pathExtension withString:@"sav"];
     const char* saveName = [[savesDirectory URLByAppendingPathComponent:gameName].path UTF8String];
@@ -107,7 +104,7 @@ ScreenLayout screenLayout;
     switch ([self useUpscalingFilter]) {
         case 0: {
             const auto upscalingFactor = [self useUpscalingFactor];
-            static std::vector<uint32_t> upscaled((256 * upscalingFactor) * ((192 * 2) * upscalingFactor));
+            static std::vector<uint32_t> upscaled(((isGBA ? 240 : 256) * upscalingFactor) * ((isGBA ? 160 : (192 * 2)) * upscalingFactor));
             switch (upscalingFactor) {
                 case 2:
                 default:
