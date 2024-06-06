@@ -9,7 +9,11 @@
 
 #ifdef __cplusplus
 #include <algorithm>
+#include <atomic>
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
+#include <thread>
 #include <vector>
 #endif
 
@@ -19,12 +23,21 @@ NS_ASSUME_NONNULL_BEGIN
 -(void) send:(const int16_t*)microphoneData sampleRate:(size_t)sampleRate NS_SWIFT_NAME(send(microphoneData:sampleRate:));
 @end
 
-@interface GrapeObjC : NSObject
+@interface GrapeObjC : NSObject {
+#ifdef __cplusplus
+    std::atomic_bool stop_run;
+    std::atomic_bool pause_emulation;
+#endif
+}
+
 @property (nonatomic, strong) id<GrapeMicProtocol> microphoneDelegate;
 
 +(GrapeObjC *) sharedInstance NS_SWIFT_NAME(shared());
--(void) insertGame:(NSURL * _Nullable)url directBoot:(BOOL)directBoot NS_SWIFT_NAME(insert(game:directBoot:));
+-(void) insertGame:(NSURL * _Nullable)url NS_SWIFT_NAME(insert(game:));
+
 -(void) step;
+-(void) setPaused:(BOOL)isPaused;
+-(BOOL) isPaused;
 
 -(uint32_t*) icon:(NSURL *)url NS_SWIFT_NAME(icon(from:));
 
@@ -47,6 +60,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 -(int) useUpscalingFactor;
 -(void) setUpscalingFactor:(int)upscalingFactor;
+
+-(int) useDirectBoot;
+-(void) setDirectBoot:(int)directBoot;
 @end
 
 NS_ASSUME_NONNULL_END

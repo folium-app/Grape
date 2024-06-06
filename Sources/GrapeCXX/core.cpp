@@ -34,9 +34,18 @@ Core::Core(std::string ndsRom, std::string gbaRom, std::string ndsSave, std::str
 {
     // Try to load BIOS and firmware; require DS files when not direct booting
     bool required = !Settings::directBoot || (ndsRom == "" && gbaRom == "" && ndsRomFd == -1 && gbaRomFd == -1);
-    if (!memory.loadBios9() && required) throw ERROR_BIOS;
-    if (!memory.loadBios7() && required) throw ERROR_BIOS;
-    if (!spi.loadFirmware() && required) throw ERROR_FIRM;
+        if (!memory.loadBios9() && required) {
+            printf("bios9");
+            throw ERROR_BIOS;
+        }
+        if (!memory.loadBios7() && required) {
+            printf("bios7");
+            throw ERROR_BIOS;
+        }
+        if (!spi.loadFirmware() && required) {
+            printf("firmware");
+            throw ERROR_FIRM;
+        }
     realGbaBios = memory.loadGbaBios();
 
     // Define the tasks that can be scheduled
@@ -85,8 +94,10 @@ Core::Core(std::string ndsRom, std::string gbaRom, std::string ndsSave, std::str
     if (gbaRom != "" || gbaRomFd != -1)
     {
         // Load a GBA ROM
-        if (!cartridgeGba.setRom(gbaRom, gbaSave) && !cartridgeGba.setRom(gbaRomFd, gbaSaveFd))
+        if (!cartridgeGba.setRom(gbaRom, gbaSave) && !cartridgeGba.setRom(gbaRomFd, gbaSaveFd)) {
+            printf("rom 98");
             throw ERROR_ROM;
+        }
 
         // Enable GBA mode right away if direct boot is enabled
         if (Settings::directBoot && ndsRom == "" && ndsRomFd == -1)
@@ -99,8 +110,10 @@ Core::Core(std::string ndsRom, std::string gbaRom, std::string ndsSave, std::str
     if (ndsRom != "" || ndsRomFd != -1)
     {
         // Load an NDS ROM
-        if (!cartridgeNds.setRom(ndsRom, ndsSave) && !cartridgeNds.setRom(ndsRomFd, ndsSaveFd))
+        if (!cartridgeNds.setRom(ndsRom, ndsSave) && !cartridgeNds.setRom(ndsRomFd, ndsSaveFd)) {
+            printf("rom 114");
             throw ERROR_ROM;
+        }
 
         // Prepare to boot the NDS ROM directly if direct boot is enabled
         if (Settings::directBoot)

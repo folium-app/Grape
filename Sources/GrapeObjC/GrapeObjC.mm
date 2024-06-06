@@ -26,15 +26,29 @@ ScreenLayout screenLayout;
         
         NSURL *documentsDirectory = [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] firstObject];
         NSURL *grapeDirectory = [documentsDirectory URLByAppendingPathComponent:@"Grape"];
+        NSURL* sysdataURL = [grapeDirectory URLByAppendingPathComponent:@"sysdata"];
         
         if (!Settings::load([[[grapeDirectory URLByAppendingPathComponent:@"config"]
                               URLByAppendingPathComponent:@"config.ini"].path UTF8String])) {
-            NSURL* sysdataURL = [grapeDirectory URLByAppendingPathComponent:@"sysdata"];
-            
             Settings::bios7Path = [[sysdataURL URLByAppendingPathComponent:@"bios7.bin"].path UTF8String];
             Settings::bios9Path = [[sysdataURL URLByAppendingPathComponent:@"bios9.bin"].path UTF8String];
             Settings::firmwarePath = [[sysdataURL URLByAppendingPathComponent:@"firmware.bin"].path UTF8String];
-            Settings::gbaBiosPath = [[sysdataURL URLByAppendingPathComponent:@"gba_bios.bin"].path UTF8String];
+            if ([[NSFileManager defaultManager] fileExistsAtPath:[sysdataURL URLByAppendingPathComponent:@"gba_bios.bin"].path]) {
+                Settings::gbaBiosPath = [[sysdataURL URLByAppendingPathComponent:@"gba_bios.bin"].path UTF8String];
+            } else {
+                Settings::gbaBiosPath = "";
+            }
+            Settings::sdImagePath = [[sysdataURL URLByAppendingPathComponent:@"sdcard.img"].path UTF8String];
+            Settings::save();
+        } else {
+            Settings::bios7Path = [[sysdataURL URLByAppendingPathComponent:@"bios7.bin"].path UTF8String];
+            Settings::bios9Path = [[sysdataURL URLByAppendingPathComponent:@"bios9.bin"].path UTF8String];
+            Settings::firmwarePath = [[sysdataURL URLByAppendingPathComponent:@"firmware.bin"].path UTF8String];
+            if ([[NSFileManager defaultManager] fileExistsAtPath:[sysdataURL URLByAppendingPathComponent:@"gba_bios.bin"].path]) {
+                Settings::gbaBiosPath = [[sysdataURL URLByAppendingPathComponent:@"gba_bios.bin"].path UTF8String];
+            } else {
+                Settings::gbaBiosPath = "";
+            }
             Settings::sdImagePath = [[sysdataURL URLByAppendingPathComponent:@"sdcard.img"].path UTF8String];
             Settings::save();
         }
@@ -50,7 +64,7 @@ ScreenLayout screenLayout;
     return sharedInstance;
 }
 
--(void) insertGame:(NSURL * _Nullable)url directBoot:(BOOL)directBoot {
+-(void) insertGame:(NSURL * _Nullable)url {
     NSURL *savesDirectory = [[[url URLByDeletingLastPathComponent] URLByDeletingLastPathComponent] URLByAppendingPathComponent:@"saves"];
     NSString *gameName = [url.lastPathComponent stringByReplacingOccurrencesOfString:url.pathExtension withString:@"sav"];
     const char* saveName = [[savesDirectory URLByAppendingPathComponent:gameName].path UTF8String];
@@ -65,25 +79,38 @@ ScreenLayout screenLayout;
 }
 
 -(void) step {
-    grapeEmulator->runFrame();
-    if (grapeEmulator->gbaMode)
-        grapeEmulator->cartridgeGba.writeSave();
-    else
-        grapeEmulator->cartridgeNds.writeSave();
+    stop_run = false;
+    pause_emulation = false;
+    
+    while (!stop_run) {
+        if (!pause_emulation) {
+            grapeEmulator->runFrame();
+            if (grapeEmulator->gbaMode)
+                grapeEmulator->cartridgeGba.writeSave();
+            else
+                grapeEmulator->cartridgeNds.writeSave();
+        }
+    }
+}
+
+-(void) setPaused:(BOOL)isPaused {
+    pause_emulation = isPaused;
+}
+
+-(BOOL) isPaused {
+    return pause_emulation;
 }
 
 -(uint32_t *) icon:(NSURL *)url {
     NdsIcon cartridge([url.path UTF8String]);
-    
-    static std::vector<uint32_t> buffer((32 * 2) * (32 * 2));
-    xbrz::scale(2, cartridge.getIcon(), buffer.data(), 32, 32, xbrz::ColorFormat::ARGB);
-    
+    static std::vector<uint32_t> buffer(32 * 32);
+    memcpy(buffer.data(), cartridge.getIcon(), 32 * 32 * sizeof(uint32_t));
     return buffer.data();
 }
 
 -(int16_t *) audioBuffer {
     static std::vector<int16_t> buffer(1024 * 2);
-    uint32_t *original = grapeEmulator->spu.getSamples(699);
+    const auto original = grapeEmulator->spu.getSamples(699);
     for (int i = 0; i < 1024; i++) {
         uint32_t sample = original[i * 699 / 1024];
         buffer[i * 2 + 0] = sample >>  0;
@@ -121,8 +148,15 @@ ScreenLayout screenLayout;
         }
         case 1: {
             const auto upscalingFactor = [self useUpscalingFactor];
-            static std::vector<uint32_t> upscaled((256 * upscalingFactor) * ((192 * 2) * upscalingFactor));
+            static std::vector<uint32_t> upscaled(((isGBA ? 240 : 256) * upscalingFactor) * ((isGBA ? 160 : (192 * 2)) * upscalingFactor));
             xbrz::scale(upscalingFactor, framebuffer.data(), upscaled.data(), isGBA ? 240 : 256, isGBA ? 160 : (192 * 2), xbrz::ColorFormat::ARGB);
+            return upscaled.data();
+        }
+        case 2: {
+            const auto upscalingFactor = [self useUpscalingFactor];
+            static std::vector<uint32_t> upscaled(((isGBA ? 240 : 256) * upscalingFactor) * ((isGBA ? 160 : (192 * 2)) * upscalingFactor));
+            xbrz::nearestNeighborScale(framebuffer.data(), isGBA ? 240 : 256, isGBA ? 160 : (192 * 2), upscaled.data(),
+                                       ((isGBA ? 240 : 256) * upscalingFactor), ((isGBA ? 160 : (192 * 2)) * upscalingFactor));
             return upscaled.data();
         }
         case -1:
@@ -188,6 +222,15 @@ ScreenLayout screenLayout;
 
 -(void) setUpscalingFactor:(int)upscalingFactor {
     Settings::upscalingFactor = upscalingFactor;
+    Settings::save();
+}
+
+-(int) useDirectBoot {
+    return Settings::directBoot;
+}
+
+-(void) setDirectBoot:(int)directBoot {
+    Settings::directBoot = directBoot;
     Settings::save();
 }
 @end
