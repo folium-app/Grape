@@ -29,6 +29,10 @@ public struct Grape {
         grapeObjC.isPaused()
     }
     
+    public func isStopped() -> Bool {
+        grapeObjC.isStopped()
+    }
+    
     public func icon(_ url: URL) -> UnsafeMutablePointer<UInt32> {
         grapeObjC.icon(from: url)
     }

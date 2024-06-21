@@ -12,7 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/jarrodnorwell/HQx", branch: "main"),
-        .package(url: "https://github.com/jarrodnorwell/XBRZ", branch: "main")
+        .package(url: "https://github.com/jarrodnorwell/xBRZ", branch: "main")
     ],
     targets: [
         .target(name: "Grape", dependencies: ["GrapeObjC"]),
@@ -23,7 +23,7 @@ let package = Package(
         ], swiftSettings: [
             .interoperabilityMode(.Cxx)
         ]),
-        .target(name: "GrapeObjC", dependencies: ["GrapeCXX", "HQx", "XBRZ"], publicHeadersPath: "include", cxxSettings: [
+        .target(name: "GrapeObjC", dependencies: ["GrapeCXX", "HQx", "xBRZ"], publicHeadersPath: "include", cxxSettings: [
             .unsafeFlags([
                 "-Wno-conversion"
             ])

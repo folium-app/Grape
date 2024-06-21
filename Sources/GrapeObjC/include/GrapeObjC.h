@@ -38,6 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
 -(void) step;
 -(void) setPaused:(BOOL)isPaused;
 -(BOOL) isPaused;
+-(BOOL) isStopped;
 
 -(uint32_t*) icon:(NSURL *)url NS_SWIFT_NAME(icon(from:));
 

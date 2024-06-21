@@ -72,6 +72,7 @@ ScreenLayout screenLayout;
     if (url && [url.pathExtension.lowercaseString isEqualToString:@"nds"]) {
         grapeEmulator = std::make_unique<Core>([url.path UTF8String], "", saveName, "");
     } else if (url && [url.pathExtension.lowercaseString isEqualToString:@"gba"]) {
+        Settings::directBoot = 1;
         grapeEmulator = std::make_unique<Core>("", [url.path UTF8String], "", saveName);
     } else {
         grapeEmulator = std::make_unique<Core>("", "");
@@ -82,14 +83,12 @@ ScreenLayout screenLayout;
     stop_run = false;
     pause_emulation = false;
     
-    while (!stop_run) {
-        if (!pause_emulation) {
-            grapeEmulator->runFrame();
-            if (grapeEmulator->gbaMode)
-                grapeEmulator->cartridgeGba.writeSave();
-            else
-                grapeEmulator->cartridgeNds.writeSave();
-        }
+    if (!pause_emulation) {
+        grapeEmulator->runFrame();
+        if (grapeEmulator->gbaMode)
+            grapeEmulator->cartridgeGba.writeSave();
+        else
+            grapeEmulator->cartridgeNds.writeSave();
     }
 }
 
@@ -99,6 +98,10 @@ ScreenLayout screenLayout;
 
 -(BOOL) isPaused {
     return pause_emulation;
+}
+
+-(BOOL) isStopped {
+    return stop_run;
 }
 
 -(uint32_t *) icon:(NSURL *)url {
