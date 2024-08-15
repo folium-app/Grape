@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -30,19 +30,75 @@ Gpu2D::Gpu2D(Core *core, bool engine): core(core), engine(engine)
         // Set up 2D GPU engine A
         bgVramAddr = 0x6000000;
         objVramAddr = 0x6400000;
-        palette = core->memory.getPalette();
-        oam = core->memory.getOam();
-        extPalettes = core->memory.getEngAExtPal();
+        palette = core->memory.palette;
+        oam = core->memory.oam;
+        extPalettes = core->memory.engAExtPal;
     }
     else
     {
         // Set up 2D GPU engine B
         bgVramAddr = 0x6200000;
         objVramAddr = 0x6600000;
-        palette = core->memory.getPalette() + 0x400;
-        oam = core->memory.getOam() + 0x400;
-        extPalettes = core->memory.getEngBExtPal();
+        palette = core->memory.palette + 0x400;
+        oam = core->memory.oam + 0x400;
+        extPalettes = core->memory.engBExtPal;
     }
+}
+
+void Gpu2D::saveState(FILE *file)
+{
+    // Write state data to the file
+    fwrite(winHFlip, sizeof(bool), sizeof(winHFlip) / sizeof(bool), file);
+    fwrite(winVFlip, sizeof(bool), sizeof(winVFlip) / sizeof(bool), file);
+    fwrite(&dispCnt, sizeof(dispCnt), 1, file);
+    fwrite(bgCnt, 2, sizeof(bgCnt) / 2, file);
+    fwrite(bgHOfs, 2, sizeof(bgHOfs) / 2, file);
+    fwrite(bgVOfs, 2, sizeof(bgVOfs) / 2, file);
+    fwrite(bgPA, 2, sizeof(bgPA) / 2, file);
+    fwrite(bgPB, 2, sizeof(bgPB) / 2, file);
+    fwrite(bgPC, 2, sizeof(bgPC) / 2, file);
+    fwrite(bgPD, 2, sizeof(bgPD) / 2, file);
+    fwrite(bgX, 4, sizeof(bgX) / 4, file);
+    fwrite(bgY, 4, sizeof(bgY) / 4, file);
+    fwrite(winX1, 2, sizeof(winX1) / 2, file);
+    fwrite(winX2, 2, sizeof(winX2) / 2, file);
+    fwrite(winY1, 2, sizeof(winY1) / 2, file);
+    fwrite(winY2, 2, sizeof(winY2) / 2, file);
+    fwrite(&winIn, sizeof(winIn), 1, file);
+    fwrite(&winOut, sizeof(winOut), 1, file);
+    fwrite(&bldCnt, sizeof(bldCnt), 1, file);
+    fwrite(&mosaic, sizeof(mosaic), 1, file);
+    fwrite(&bldAlpha, sizeof(bldAlpha), 1, file);
+    fwrite(&bldY, sizeof(bldY), 1, file);
+    fwrite(&masterBright, sizeof(masterBright), 1, file);
+}
+
+void Gpu2D::loadState(FILE *file)
+{
+    // Read state data from the file
+    fread(winHFlip, sizeof(bool), sizeof(winHFlip) / sizeof(bool), file);
+    fread(winVFlip, sizeof(bool), sizeof(winVFlip) / sizeof(bool), file);
+    fread(&dispCnt, sizeof(dispCnt), 1, file);
+    fread(bgCnt, 2, sizeof(bgCnt) / 2, file);
+    fread(bgHOfs, 2, sizeof(bgHOfs) / 2, file);
+    fread(bgVOfs, 2, sizeof(bgVOfs) / 2, file);
+    fread(bgPA, 2, sizeof(bgPA) / 2, file);
+    fread(bgPB, 2, sizeof(bgPB) / 2, file);
+    fread(bgPC, 2, sizeof(bgPC) / 2, file);
+    fread(bgPD, 2, sizeof(bgPD) / 2, file);
+    fread(bgX, 4, sizeof(bgX) / 4, file);
+    fread(bgY, 4, sizeof(bgY) / 4, file);
+    fread(winX1, 2, sizeof(winX1) / 2, file);
+    fread(winX2, 2, sizeof(winX2) / 2, file);
+    fread(winY1, 2, sizeof(winY1) / 2, file);
+    fread(winY2, 2, sizeof(winY2) / 2, file);
+    fread(&winIn, sizeof(winIn), 1, file);
+    fread(&winOut, sizeof(winOut), 1, file);
+    fread(&bldCnt, sizeof(bldCnt), 1, file);
+    fread(&mosaic, sizeof(mosaic), 1, file);
+    fread(&bldAlpha, sizeof(bldAlpha), 1, file);
+    fread(&bldY, sizeof(bldY), 1, file);
+    fread(&masterBright, sizeof(masterBright), 1, file);
 }
 
 uint32_t Gpu2D::rgb5ToRgb6(uint32_t color)
@@ -1335,7 +1391,7 @@ void Gpu2D::writeWinH(int win, uint16_t mask, uint16_t value)
     if (mask & 0xFF00) winX1[win] = (value & 0xFF00) >> 8;
 
     // Invert the window if X1 exceeds X2
-    if (winHFlip[win] == (winX1[win] > winX2[win]))
+    if (winHFlip[win] = (winX1[win] > winX2[win]))
         SWAP(winX1[win], winX2[win]);
 }
 
@@ -1346,7 +1402,7 @@ void Gpu2D::writeWinV(int win, uint16_t mask, uint16_t value)
     if (mask & 0xFF00) winY1[win] = (value & 0xFF00) >> 8;
 
     // Invert the window if Y1 exceeds Y2
-    if (winVFlip[win] == (winY1[win] > winY2[win]))
+    if (winVFlip[win] = (winY1[win] > winY2[win]))
         SWAP(winY1[win], winY2[win]);
 }
 

@@ -1,52 +1,44 @@
-//
-//  Grape.swift
-//
-//
-//  Created by Jarrod Norwell on 26/2/2024.
-//
+// The Swift Programming Language
+// https://docs.swift.org/swift-book
 
-import GrapeObjC
 import Foundation
+import GrapeObjC
 
-public struct Grape {
+public struct Grape : @unchecked Sendable {
     public static let shared = Grape()
     
     fileprivate let grapeObjC = GrapeObjC.shared()
     
-    public func insert(game url: URL) {
+    public func informationForGame(at url: URL) -> (icon: UnsafeMutablePointer<UInt32>, title: String) {
+        (grapeObjC.iconForGame(at: url), grapeObjC.titleForGame(at: url))
+    }
+    
+    public func insertCartridge(from url: URL) {
         grapeObjC.insert(game: url)
+    }
+    
+    public func updateScreenLayout(with size: CGSize) {
+        grapeObjC.updateScreenLayout(size)
     }
     
     public func step() {
         grapeObjC.step()
     }
     
-    public func setPaused(_ isPaused: Bool) {
-        grapeObjC.setPaused(isPaused)
-    }
-    
-    public func isPaused() -> Bool {
-        grapeObjC.isPaused()
-    }
-    
-    public func isStopped() -> Bool {
-        grapeObjC.isStopped()
-    }
-    
-    public func icon(_ url: URL) -> UnsafeMutablePointer<UInt32> {
-        grapeObjC.icon(from: url)
-    }
-    
     public func audioBuffer() -> UnsafeMutablePointer<Int16> {
         grapeObjC.audioBuffer()
     }
     
-    public func videoBuffer(isGBA: Bool) -> UnsafeMutablePointer<UInt32> {
-        grapeObjC.videoBuffer(isGBA)
+    public func microphoneBuffer(with buffer: UnsafeMutablePointer<Int16>) {
+        grapeObjC.microphoneBuffer(buffer)
+    }
+        
+    public func videoBuffer() -> UnsafeMutablePointer<UInt32> {
+        grapeObjC.videoBuffer()
     }
     
-    public func updateScreenLayout(with size: CGSize) {
-        grapeObjC.updateScreenLayout(size)
+    public func videoBufferSize() -> CGSize {
+        grapeObjC.videoBufferSize()
     }
     
     public func touchBegan(at point: CGPoint) {
@@ -67,37 +59,5 @@ public struct Grape {
     
     public func virtualControllerButtonUp(_ button: Int32) {
         grapeObjC.virtualControllerButtonUp(button)
-    }
-    
-    public func useHighRes3D() -> Int32 {
-        grapeObjC.useHighRes3D()
-    }
-    
-    public func setHighRes3D(_ highRes3D: Int32) {
-        grapeObjC.setHighRes3D(highRes3D)
-    }
-    
-    public func useUpscalingFilter() -> Int32 {
-        grapeObjC.useUpscalingFilter()
-    }
-    
-    public func setUpscalingFilter(_ upscalingFilter: Int32) {
-        grapeObjC.setUpscalingFilter(upscalingFilter)
-    }
-    
-    public func useUpscalingFactor() -> Int32 {
-        grapeObjC.useUpscalingFactor()
-    }
-    
-    public func setUpscalingFactor(_ upscalingFactor: Int32) {
-        grapeObjC.setUpscalingFactor(upscalingFactor)
-    }
-    
-    public func useDirectBoot() -> Int32 {
-        grapeObjC.useDirectBoot()
-    }
-    
-    public func setDirectBoot(_ directBoot: Int32) {
-        grapeObjC.setDirectBoot(directBoot)
     }
 }

@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -31,6 +31,8 @@ class Interpreter
 {
     public:
         Interpreter(Core *core, bool arm7);
+        void saveState(FILE *file);
+        void loadState(FILE *file);
 
         void init();
         void directBoot();
@@ -39,21 +41,21 @@ class Interpreter
         static void runNdsFrame(Core &core);
         static void runGbaFrame(Core &core);
 
-        void halt(int bit)   { halted |=  BIT(bit); }
+        void halt(int bit) { halted |= BIT(bit); }
         void unhalt(int bit) { halted &= ~BIT(bit); }
         void sendInterrupt(int bit);
         void interrupt();
 
-        bool     isThumb() { return cpsr & BIT(5);  }
-        uint32_t getPC()   { return *registers[15]; }
+        bool isThumb() { return cpsr & BIT(5); }
+        uint32_t getPC() { return *registers[15]; }
 
         void setBios(Bios *bios) { this->bios = bios; }
         int handleHleIrq();
 
-        uint8_t  readIme()     { return ime;     }
-        uint32_t readIe()      { return ie;      }
-        uint32_t readIrf()     { return irf;     }
-        uint8_t  readPostFlg() { return postFlg; }
+        uint8_t readIme() { return ime; }
+        uint32_t readIe() { return ie; }
+        uint32_t readIrf() { return irf; }
+        uint8_t readPostFlg() { return postFlg; }
 
         void writeIme(uint8_t value);
         void writeIe(uint32_t mask, uint32_t value);
@@ -67,13 +69,13 @@ class Interpreter
         Bios *bios = nullptr;
         uint32_t pipeline[2] = {};
 
-        uint32_t *registers[32]   = {};
+        uint32_t *registers[32] = {};
         uint32_t registersUsr[16] = {};
-        uint32_t registersFiq[7]  = {};
-        uint32_t registersSvc[2]  = {};
-        uint32_t registersAbt[2]  = {};
-        uint32_t registersIrq[2]  = {};
-        uint32_t registersUnd[2]  = {};
+        uint32_t registersFiq[7] = {};
+        uint32_t registersSvc[2] = {};
+        uint32_t registersAbt[2] = {};
+        uint32_t registersIrq[2] = {};
+        uint32_t registersUnd[2] = {};
 
         uint32_t cpsr = 0, *spsr = nullptr;
         uint32_t spsrFiq = 0, spsrSvc = 0, spsrAbt = 0, spsrIrq = 0, spsrUnd = 0;
@@ -94,6 +96,7 @@ class Interpreter
         int runOpcode();
         int exception(uint8_t vector);
         void flushPipeline();
+        void swapRegisters(uint32_t value);
         void setCpsr(uint32_t value, bool save = false);
         int handleReserved(uint32_t opcode);
         int finishHleIrq();

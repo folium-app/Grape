@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -30,6 +30,8 @@ class Rtc
 {
     public:
         Rtc(Core *core): core(core) {}
+        void saveState(FILE *file);
+        void loadState(FILE *file);
 
         void enableGpRtc() { gpRtc = true; }
         void reset();

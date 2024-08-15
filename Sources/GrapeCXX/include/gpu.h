@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -35,6 +35,9 @@ class Gpu
     public:
         Gpu(Core *core);
         ~Gpu();
+
+        void saveState(FILE *file);
+        void loadState(FILE *file);
 
         bool getFrame(uint32_t *out, bool gbaCrop);
         void invalidate3D() { dirty3D |= BIT(0); }

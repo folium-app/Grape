@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -21,6 +21,7 @@
 #define GPU_2D_H
 
 #include <cstdint>
+#include <cstdio>
 
 class Core;
 
@@ -28,6 +29,8 @@ class Gpu2D
 {
     public:
         Gpu2D(Core *core, bool engine);
+        void saveState(FILE *file);
+        void loadState(FILE *file);
 
         void reloadRegisters();
         void drawGbaScanline(int line);

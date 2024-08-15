@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -21,13 +21,16 @@
 #define TIMERS_H
 
 #include <cstdint>
+#include <cstdio>
 
 class Core;
 
 class Timers
 {
     public:
-        Timers(Core *core, bool cpu): core(core), cpu(cpu) {}
+        Timers(Core *core, bool arm7): core(core), arm7(arm7) {}
+        void saveState(FILE *file);
+        void loadState(FILE *file);
 
         void resetCycles();
         void overflow(int timer);
@@ -40,7 +43,7 @@ class Timers
 
     private:
         Core *core;
-        bool cpu;
+        bool arm7;
 
         uint16_t timers[4] = {};
         uint8_t shifts[4] = {};

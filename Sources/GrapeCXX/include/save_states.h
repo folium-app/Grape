@@ -17,21 +17,42 @@
     along with NooDS. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef NDS_ICON_H
-#define NDS_ICON_H
+#ifndef SAVE_STATES_H
+#define SAVE_STATES_H
 
 #include <cstdint>
 #include <string>
 
-class NdsIcon
+class Core;
+
+enum StateResult
 {
-public:
-    NdsIcon(std::string path, int fd = -1);
-    
-    uint32_t *getIcon() { return icon; }
-    
-private:
-    uint32_t icon[32 * 32];
+    STATE_SUCCESS,
+    STATE_FILE_FAIL,
+    STATE_FORMAT_FAIL,
+    STATE_VERSION_FAIL
 };
 
-#endif // NDS_ICON_H
+class SaveStates
+{
+    public:
+        SaveStates(Core *core): core(core) {}
+        void setPath(std::string path, bool gba);
+        void setFd(int fd, bool gba);
+
+        StateResult checkState();
+        bool saveState();
+        bool loadState();
+
+    private:
+        Core *core;
+        std::string ndsPath, gbaPath;
+        int ndsFd = -1, gbaFd = -1;
+
+        static const char *stateTag;
+        static const uint32_t stateVersion;
+
+        FILE *openFile(const char *mode);
+};
+
+#endif // SAVE_STATES_H

@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -35,6 +35,13 @@
 #define ftruncate(...) (0)
 #else
 #include <unistd.h>
+#endif
+
+// Macro to handle differing mkdir arguments on Windows
+#ifdef WINDOWS
+#define MKDIR_ARGS
+#else
+#define MKDIR_ARGS , 0777
 #endif
 
 // Macro to force inlining

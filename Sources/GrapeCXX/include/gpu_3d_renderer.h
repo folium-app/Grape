@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -22,6 +22,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstdio>
 #include <thread>
 
 class Core;
@@ -34,8 +35,10 @@ class Gpu3DRenderer
         Gpu3DRenderer(Core *core);
         ~Gpu3DRenderer();
 
-        void drawScanline(int line);
+        void saveState(FILE *file);
+        void loadState(FILE *file);
 
+        void drawScanline(int line);
         uint32_t *getLine(int line);
 
         uint16_t readDisp3DCnt() { return disp3DCnt; }
@@ -62,8 +65,8 @@ class Gpu3DRenderer
         int polygonTop[2048] = {};
         int polygonBot[2048] = {};
 
-        int activeThreads = 0;
-        std::thread *threads[3] = {};
+        uint8_t activeThreads = 0;
+        std::vector<std::thread*> threads;
         std::atomic<int> ready[192 * 2];
 
         uint16_t disp3DCnt = 0;

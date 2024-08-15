@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -25,6 +25,57 @@ Interpreter::Interpreter(Core *core, bool arm7): core(core), arm7(arm7)
     // Initialize the registers for user mode
     for (int i = 0; i < 32; i++)
         registers[i] = &registersUsr[i & 0xF];
+}
+
+void Interpreter::saveState(FILE *file)
+{
+    // Write state data to the file
+    fwrite(pipeline, 4, sizeof(pipeline) / 4, file);
+    fwrite(registersUsr, 4, sizeof(registersUsr) / 4, file);
+    fwrite(registersFiq, 4, sizeof(registersFiq) / 4, file);
+    fwrite(registersSvc, 4, sizeof(registersSvc) / 4, file);
+    fwrite(registersAbt, 4, sizeof(registersAbt) / 4, file);
+    fwrite(registersIrq, 4, sizeof(registersIrq) / 4, file);
+    fwrite(registersUnd, 4, sizeof(registersUnd) / 4, file);
+    fwrite(&cpsr, sizeof(cpsr), 1, file);
+    fwrite(&spsrFiq, sizeof(spsrFiq), 1, file);
+    fwrite(&spsrSvc, sizeof(spsrSvc), 1, file);
+    fwrite(&spsrAbt, sizeof(spsrAbt), 1, file);
+    fwrite(&spsrIrq, sizeof(spsrIrq), 1, file);
+    fwrite(&spsrUnd, sizeof(spsrUnd), 1, file);
+    fwrite(&halted, sizeof(halted), 1, file);
+    fwrite(&cycles, sizeof(cycles), 1, file);
+    fwrite(&ime, sizeof(ime), 1, file);
+    fwrite(&ie, sizeof(ie), 1, file);
+    fwrite(&irf, sizeof(irf), 1, file);
+    fwrite(&postFlg, sizeof(postFlg), 1, file);
+}
+
+void Interpreter::loadState(FILE *file)
+{
+    // Read state data from the file
+    fread(pipeline, 4, sizeof(pipeline) / 4, file);
+    fread(registersUsr, 4, sizeof(registersUsr) / 4, file);
+    fread(registersFiq, 4, sizeof(registersFiq) / 4, file);
+    fread(registersSvc, 4, sizeof(registersSvc) / 4, file);
+    fread(registersAbt, 4, sizeof(registersAbt) / 4, file);
+    fread(registersIrq, 4, sizeof(registersIrq) / 4, file);
+    fread(registersUnd, 4, sizeof(registersUnd) / 4, file);
+    fread(&cpsr, sizeof(cpsr), 1, file);
+    fread(&spsrFiq, sizeof(spsrFiq), 1, file);
+    fread(&spsrSvc, sizeof(spsrSvc), 1, file);
+    fread(&spsrAbt, sizeof(spsrAbt), 1, file);
+    fread(&spsrIrq, sizeof(spsrIrq), 1, file);
+    fread(&spsrUnd, sizeof(spsrUnd), 1, file);
+    fread(&halted, sizeof(halted), 1, file);
+    fread(&cycles, sizeof(cycles), 1, file);
+    fread(&ime, sizeof(ime), 1, file);
+    fread(&ie, sizeof(ie), 1, file);
+    fread(&irf, sizeof(irf), 1, file);
+    fread(&postFlg, sizeof(postFlg), 1, file);
+
+    // Update mapped registers
+    swapRegisters(cpsr);
 }
 
 void Interpreter::init()
@@ -88,7 +139,7 @@ void Interpreter::runNdsFrame(Core &core)
         // Run all tasks that are scheduled now
         while (core.events[0].cycles <= core.globalCycles)
         {
-            (*core.events[0].task)();
+            core.tasks[core.events[0].task]();
             core.events.erase(core.events.begin());
         }
     }
@@ -112,7 +163,7 @@ void Interpreter::runGbaFrame(Core &core)
         // Run all tasks that are scheduled now
         while (core.events[0].cycles <= core.globalCycles)
         {
-            (*core.events[0].task)();
+            core.tasks[core.events[0].task]();
             core.events.erase(core.events.begin());
         }
     }
@@ -177,14 +228,14 @@ void Interpreter::interrupt()
 int Interpreter::exception(uint8_t vector)
 {
     // Forward the call to HLE BIOS if enabled, unless on ARM9 with the exception address changed
-    if (bios && (arm7 || core->cp15.getExceptionAddr()))
+    if (bios && (arm7 || core->cp15.exceptionAddr))
         return bios->execute(vector, registers);
 
     // Switch the CPU mode, save the return address, and jump to the exception vector
     static const uint8_t modes[] = { 0x13, 0x1B, 0x13, 0x17, 0x17, 0x13, 0x12, 0x11 };
     setCpsr((cpsr & ~0x3F) | BIT(7) | modes[vector >> 2], true); // ARM, interrupts off, new mode
     *registers[14] = *registers[15] + ((*spsr & BIT(5)) >> 4);
-    *registers[15] = (arm7 ? 0 : core->cp15.getExceptionAddr()) + vector;
+    *registers[15] = (arm7 ? 0 : core->cp15.exceptionAddr) + vector;
     flushPipeline();
     return 3;
 }
@@ -206,85 +257,89 @@ void Interpreter::flushPipeline()
     }
 }
 
+void Interpreter::swapRegisters(uint32_t value)
+{
+    // Swap banked registers based on a CPU mode value
+    switch (value & 0x1F)
+    {
+        case 0x10: // User
+        case 0x1F: // System
+            registers[8] = &registersUsr[8];
+            registers[9] = &registersUsr[9];
+            registers[10] = &registersUsr[10];
+            registers[11] = &registersUsr[11];
+            registers[12] = &registersUsr[12];
+            registers[13] = &registersUsr[13];
+            registers[14] = &registersUsr[14];
+            spsr = nullptr;
+            break;
+
+        case 0x11: // FIQ
+            registers[8] = &registersFiq[0];
+            registers[9] = &registersFiq[1];
+            registers[10] = &registersFiq[2];
+            registers[11] = &registersFiq[3];
+            registers[12] = &registersFiq[4];
+            registers[13] = &registersFiq[5];
+            registers[14] = &registersFiq[6];
+            spsr = &spsrFiq;
+            break;
+
+        case 0x12: // IRQ
+            registers[8] = &registersUsr[8];
+            registers[9] = &registersUsr[9];
+            registers[10] = &registersUsr[10];
+            registers[11] = &registersUsr[11];
+            registers[12] = &registersUsr[12];
+            registers[13] = &registersIrq[0];
+            registers[14] = &registersIrq[1];
+            spsr = &spsrIrq;
+            break;
+
+        case 0x13: // Supervisor
+            registers[8] = &registersUsr[8];
+            registers[9] = &registersUsr[9];
+            registers[10] = &registersUsr[10];
+            registers[11] = &registersUsr[11];
+            registers[12] = &registersUsr[12];
+            registers[13] = &registersSvc[0];
+            registers[14] = &registersSvc[1];
+            spsr = &spsrSvc;
+            break;
+
+        case 0x17: // Abort
+            registers[8] = &registersUsr[8];
+            registers[9] = &registersUsr[9];
+            registers[10] = &registersUsr[10];
+            registers[11] = &registersUsr[11];
+            registers[12] = &registersUsr[12];
+            registers[13] = &registersAbt[0];
+            registers[14] = &registersAbt[1];
+            spsr = &spsrAbt;
+            break;
+
+        case 0x1B: // Undefined
+            registers[8] = &registersUsr[8];
+            registers[9] = &registersUsr[9];
+            registers[10] = &registersUsr[10];
+            registers[11] = &registersUsr[11];
+            registers[12] = &registersUsr[12];
+            registers[13] = &registersUnd[0];
+            registers[14] = &registersUnd[1];
+            spsr = &spsrUnd;
+            break;
+
+        default:
+            LOG("Unknown ARM%d CPU mode: 0x%X\n", arm7 ? 7 : 9, value & 0x1F);
+            break;
+    }
+}
+
 void Interpreter::setCpsr(uint32_t value, bool save)
 {
-    // Swap banked registers if the CPU mode changed
+    // Update registers if the CPU mode changed
     if ((value & 0x1F) != (cpsr & 0x1F))
-    {
-        switch (value & 0x1F)
-        {
-            case 0x10: // User
-            case 0x1F: // System
-                registers[8]  = &registersUsr[8];
-                registers[9]  = &registersUsr[9];
-                registers[10] = &registersUsr[10];
-                registers[11] = &registersUsr[11];
-                registers[12] = &registersUsr[12];
-                registers[13] = &registersUsr[13];
-                registers[14] = &registersUsr[14];
-                spsr = nullptr;
-                break;
-
-            case 0x11: // FIQ
-                registers[8]  = &registersFiq[0];
-                registers[9]  = &registersFiq[1];
-                registers[10] = &registersFiq[2];
-                registers[11] = &registersFiq[3];
-                registers[12] = &registersFiq[4];
-                registers[13] = &registersFiq[5];
-                registers[14] = &registersFiq[6];
-                spsr = &spsrFiq;
-                break;
-
-            case 0x12: // IRQ
-                registers[8]  = &registersUsr[8];
-                registers[9]  = &registersUsr[9];
-                registers[10] = &registersUsr[10];
-                registers[11] = &registersUsr[11];
-                registers[12] = &registersUsr[12];
-                registers[13] = &registersIrq[0];
-                registers[14] = &registersIrq[1];
-                spsr = &spsrIrq;
-                break;
-
-            case 0x13: // Supervisor
-                registers[8]  = &registersUsr[8];
-                registers[9]  = &registersUsr[9];
-                registers[10] = &registersUsr[10];
-                registers[11] = &registersUsr[11];
-                registers[12] = &registersUsr[12];
-                registers[13] = &registersSvc[0];
-                registers[14] = &registersSvc[1];
-                spsr = &spsrSvc;
-                break;
-
-            case 0x17: // Abort
-                registers[8]  = &registersUsr[8];
-                registers[9]  = &registersUsr[9];
-                registers[10] = &registersUsr[10];
-                registers[11] = &registersUsr[11];
-                registers[12] = &registersUsr[12];
-                registers[13] = &registersAbt[0];
-                registers[14] = &registersAbt[1];
-                spsr = &spsrAbt;
-                break;
-
-            case 0x1B: // Undefined
-                registers[8]  = &registersUsr[8];
-                registers[9]  = &registersUsr[9];
-                registers[10] = &registersUsr[10];
-                registers[11] = &registersUsr[11];
-                registers[12] = &registersUsr[12];
-                registers[13] = &registersUnd[0];
-                registers[14] = &registersUnd[1];
-                spsr = &spsrUnd;
-                break;
-
-            default:
-                LOG("Unknown ARM%d CPU mode: 0x%X\n", arm7 ? 7 : 9, value & 0x1F);
-                break;
-        }
-    }
+        swapRegisters(value);
 
     // Set the CPSR, saving the old value if requested
     if (save && spsr) *spsr = cpsr;
@@ -334,7 +389,7 @@ int Interpreter::handleHleIrq()
 
     // Set the return address to the special HLE BIOS opcode amd jump to the interrupt handler
     *registers[14] = arm7 ? 0x00000000 : 0xFFFF0000;
-    *registers[15] = core->memory.read<uint32_t>(arm7, arm7 ? 0x3FFFFFC : (core->cp15.getDtcmAddr() + 0x3FFC));
+    *registers[15] = core->memory.read<uint32_t>(arm7, arm7 ? 0x3FFFFFC : (core->cp15.dtcmAddr + 0x3FFC));
     flushPipeline();
     return 3;
 }

@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -21,6 +21,36 @@
 
 #include "rtc.h"
 #include "core.h"
+
+void Rtc::saveState(FILE *file)
+{
+    // Write state data to the file
+    fwrite(&csCur, sizeof(csCur), 1, file);
+    fwrite(&sckCur, sizeof(sckCur), 1, file);
+    fwrite(&sioCur, sizeof(sioCur), 1, file);
+    fwrite(&writeCount, sizeof(writeCount), 1, file);
+    fwrite(&command, sizeof(command), 1, file);
+    fwrite(&control, sizeof(control), 1, file);
+    fwrite(dateTime, 1, sizeof(dateTime), file);
+    fwrite(&rtc, sizeof(rtc), 1, file);
+    fwrite(&gpDirection, sizeof(gpDirection), 1, file);
+    fwrite(&gpControl, sizeof(gpControl), 1, file);
+}
+
+void Rtc::loadState(FILE *file)
+{
+    // Read state data from the file
+    fread(&csCur, sizeof(csCur), 1, file);
+    fread(&sckCur, sizeof(sckCur), 1, file);
+    fread(&sioCur, sizeof(sioCur), 1, file);
+    fread(&writeCount, sizeof(writeCount), 1, file);
+    fread(&command, sizeof(command), 1, file);
+    fread(&control, sizeof(control), 1, file);
+    fread(dateTime, 1, sizeof(dateTime), file);
+    fread(&rtc, sizeof(rtc), 1, file);
+    fread(&gpDirection, sizeof(gpDirection), 1, file);
+    fread(&gpControl, sizeof(gpControl), 1, file);
+}
 
 void Rtc::updateRtc(bool cs, bool sck, bool sio)
 {

@@ -17,21 +17,43 @@
     along with NooDS. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef NDS_ICON_H
-#define NDS_ICON_H
+#ifndef ACTION_REPLAY_H
+#define ACTION_REPLAY_H
 
 #include <cstdint>
+#include <mutex>
 #include <string>
+#include <vector>
 
-class NdsIcon
+class Core;
+
+struct ARCheat
 {
-public:
-    NdsIcon(std::string path, int fd = -1);
-    
-    uint32_t *getIcon() { return icon; }
-    
-private:
-    uint32_t icon[32 * 32];
+    std::string name;
+    std::vector<uint32_t> code;
+    bool enabled;
 };
 
-#endif // NDS_ICON_H
+class ActionReplay
+{
+    public:
+        std::vector<ARCheat> cheats;
+
+        ActionReplay(Core *core): core(core) {}
+        void setPath(std::string path);
+        void setFd(int fd);
+
+        bool loadCheats();
+        bool saveCheats();
+        void applyCheats();
+
+    private:
+        Core *core;
+        std::mutex mutex;
+        std::string path;
+        int fd = -1;
+
+        FILE *openFile(const char *mode);
+};
+
+#endif // ACTION_REPLAY_H

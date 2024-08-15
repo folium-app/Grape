@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -28,6 +28,7 @@ class ScreenLayout
         static int screenArrangement;
         static int screenSizing;
         static int screenGap;
+        static int aspectRatio;
         static int integerScale;
         static int gbaCrop;
 
@@ -40,7 +41,7 @@ class ScreenLayout
 
         static void addSettings();
 
-        void update(int winWidth, int winHeight, bool gbaMode);
+        void update(int winWidth, int winHeight, bool gbaMode, bool splitScreens = false);
         int getTouchX(int x, int y);
         int getTouchY(int x, int y);
 };

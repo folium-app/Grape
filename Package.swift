@@ -1,35 +1,35 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
 let package = Package(
     name: "Grape",
-    products: [
-        .library(name: "Grape", targets: ["Grape"]),
-        .library(name: "GrapeCXX", targets: ["GrapeCXX"]),
-        .library(name: "GrapeObjC", targets: ["GrapeObjC"])
+    platforms: [
+        .iOS(.v16),
+        .tvOS(.v16)
     ],
-    dependencies: [
-        .package(url: "https://github.com/jarrodnorwell/HQx", branch: "main"),
-        .package(url: "https://github.com/jarrodnorwell/xBRZ", branch: "main")
+    products: [
+        .library(name: "Grape", targets: [
+            "Grape"
+        ]),
+        .library(name: "GrapeCXX", targets: [
+            "GrapeCXX"
+        ]),
+        .library(name: "GrapeObjC", targets: [
+            "GrapeObjC"
+        ])
     ],
     targets: [
-        .target(name: "Grape", dependencies: ["GrapeObjC"]),
-        .target(name: "GrapeCXX", sources: [""], publicHeadersPath: "include", cxxSettings: [
-            .unsafeFlags([
-                "-Wno-conversion"
-            ])
-        ], swiftSettings: [
-            .interoperabilityMode(.Cxx)
+        .target(name: "Grape", dependencies: [
+            "GrapeObjC"
         ]),
-        .target(name: "GrapeObjC", dependencies: ["GrapeCXX", "HQx", "xBRZ"], publicHeadersPath: "include", cxxSettings: [
-            .unsafeFlags([
-                "-Wno-conversion"
-            ])
-        ], swiftSettings: [
-            .interoperabilityMode(.Cxx)
-        ])
+        .target(name: "GrapeCXX", sources: [
+            "", "common"
+        ], publicHeadersPath: "include"),
+        .target(name: "GrapeObjC", dependencies: [
+            "GrapeCXX"
+        ], publicHeadersPath: "include")
     ],
     cLanguageStandard: .c2x,
     cxxLanguageStandard: .cxx2b

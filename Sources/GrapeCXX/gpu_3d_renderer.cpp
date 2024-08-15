@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -35,14 +35,37 @@ Gpu3DRenderer::Gpu3DRenderer(Core *core): core(core)
 Gpu3DRenderer::~Gpu3DRenderer()
 {
     // Clean up the threads
-    for (int i = 0; i < activeThreads; i++)
+    for (size_t i = 0; i < threads.size(); i++)
     {
-        if (threads[i]) 
-        {
-            threads[i]->join();
-            delete threads[i];
-        }
+        threads[i]->join();
+        delete threads[i];
     }
+}
+
+void Gpu3DRenderer::saveState(FILE *file)
+{
+    // Write state data to the file
+    fwrite(&disp3DCnt, sizeof(disp3DCnt), 1, file);
+    fwrite(edgeColor, 2, sizeof(edgeColor) / 2, file);
+    fwrite(&clearColor, sizeof(clearColor), 1, file);
+    fwrite(&clearDepth, sizeof(clearDepth), 1, file);
+    fwrite(&fogColor, sizeof(fogColor), 1, file);
+    fwrite(&fogOffset, sizeof(fogOffset), 1, file);
+    fwrite(fogTable, 1, sizeof(fogTable), file);
+    fwrite(toonTable, 2, sizeof(toonTable) / 2, file);
+}
+
+void Gpu3DRenderer::loadState(FILE *file)
+{
+    // Read state data from the file
+    fread(&disp3DCnt, sizeof(disp3DCnt), 1, file);
+    fread(edgeColor, 2, sizeof(edgeColor) / 2, file);
+    fread(&clearColor, sizeof(clearColor), 1, file);
+    fread(&clearDepth, sizeof(clearDepth), 1, file);
+    fread(&fogColor, sizeof(fogColor), 1, file);
+    fread(&fogOffset, sizeof(fogOffset), 1, file);
+    fread(fogTable, 1, sizeof(fogTable), file);
+    fread(toonTable, 2, sizeof(toonTable) / 2, file);
 }
 
 uint32_t Gpu3DRenderer::rgba5ToRgba6(uint32_t color)
@@ -106,15 +129,15 @@ void Gpu3DRenderer::drawScanline(int line)
     if (line == 0)
     {
         // Calculate the scanline bounds for each polygon
-        for (int i = 0; i < core->gpu3D.getPolygonCount(); i++)
+        for (int i = 0; i < core->gpu3D.polygonCountOut; i++)
         {
             polygonTop[i] = 192 * 2;
             polygonBot[i] =   0 * 2;
 
-            _Polygon *polygon = &core->gpu3D.getPolygons()[i];
+            _Polygon *polygon = &core->gpu3D.polygonsOut[i];
             for (int j = 0; j < polygon->size; j++)
             {
-                Vertex *vertex = &polygon->vertices[j];
+                Vertex *vertex = &core->gpu3D.verticesOut[polygon->vertices + j];
                 if (vertex->y < polygonTop[i]) polygonTop[i] = vertex->y;
                 if (vertex->y > polygonBot[i]) polygonBot[i] = vertex->y;
             }
@@ -127,30 +150,23 @@ void Gpu3DRenderer::drawScanline(int line)
         resShift = Settings::highRes3D;
 
         // Clean up any existing threads
-        for (int i = 0; i < activeThreads; i++)
+        for (size_t i = 0; i < threads.size(); i++)
         {
-            if (threads[i]) 
-            {
-                threads[i]->join();
-                delete threads[i];
-            }
+            threads[i]->join();
+            delete threads[i];
         }
-
-        // Update the thread count
-        activeThreads = Settings::threaded3D;
-        if (activeThreads > 3) activeThreads = 3;
+        threads.clear();
 
         // Set up threaded 3D rendering if enabled
-        if (activeThreads > 0)
+        if ((activeThreads = Settings::threaded3D & 0xF))
         {
             // Mark the scanlines as not ready
-            int end = 192 << resShift;
-            for (int i = 0; i < end; i++)
+            for (int i = 0; i < (192 << resShift); i++)
                 ready[i].store(0);
 
             // Create threads to draw the scanlines
-            for (int i = 0; i < activeThreads; i++)
-                threads[i] = new std::thread(&Gpu3DRenderer::drawThreaded, this, i);
+            for (uint8_t i = 0; i < activeThreads; i++)
+                threads.push_back(new std::thread(&Gpu3DRenderer::drawThreaded, this, i));
         }
     }
 
@@ -245,14 +261,14 @@ void Gpu3DRenderer::drawScanline1(int line)
     std::vector<int> translucent;
 
     // Draw the polygons
-    for (int i = 0; i < core->gpu3D.getPolygonCount(); i++)
+    for (int i = 0; i < core->gpu3D.polygonCountOut; i++)
     {
         // Skip polygons that aren't on the current scanline
         if (line < polygonTop[i] || line >= polygonBot[i])
             continue;
 
         // Draw solid polygons and save the translucent ones for later
-        _Polygon *polygon = &core->gpu3D.getPolygons()[i];
+        _Polygon *polygon = &core->gpu3D.polygonsOut[i];
         if (polygon->alpha < 0x3F || polygon->textureFmt == 1 || polygon->textureFmt == 6)
             translucent.push_back(i);
         else
@@ -384,14 +400,14 @@ void Gpu3DRenderer::finishScanline(int line)
 uint8_t *Gpu3DRenderer::getTexture(uint32_t address)
 {
     // Get a pointer to texture data
-    uint8_t *slot = core->memory.getTex3D()[address >> 17];
+    uint8_t *slot = core->memory.tex3D[address >> 17];
     return slot ? &slot[address & 0x1FFFF] : nullptr;
 }
 
 uint8_t *Gpu3DRenderer::getPalette(uint32_t address)
 {
     // Get a pointer to palette data
-    uint8_t *slot = core->memory.getPal3D()[address >> 14];
+    uint8_t *slot = core->memory.pal3D[address >> 14];
     return slot ? &slot[address & 0x3FFF] : nullptr;
 }
 
@@ -677,12 +693,12 @@ uint32_t Gpu3DRenderer::readTexture(_Polygon *polygon, int s, int t)
 
 void Gpu3DRenderer::drawPolygon(int line, int polygonIndex)
 {
-    _Polygon *polygon = &core->gpu3D.getPolygons()[polygonIndex];
+    _Polygon *polygon = &core->gpu3D.polygonsOut[polygonIndex];
 
     // Get the polygon vertices
     Vertex *vertices[10];
     for (int i = 0; i < polygon->size; i++)
-        vertices[i] = &polygon->vertices[i];
+        vertices[i] = &core->gpu3D.verticesOut[polygon->vertices + i];
 
     // Unclipped quad strip polygons have their vertices crossed, so uncross them
     if (polygon->crossed)
@@ -984,12 +1000,11 @@ void Gpu3DRenderer::drawPolygon(int line, int polygonIndex)
             }
             else
             {
-                // Adjust the W values to be 15-bit so the calculation doesn't overflow
-                // Also adjust interpolation precision to avoid overflow in high-res mode
+                // Adjust W values to be 15-bit so that a 32-bit calculation wouldn't overflow
+                // The calculation is actually 64-bit for upscaling, but it can still be accurate
                 uint32_t wa = (ws[i2] >> 1) + ((ws[i2] & 1) && !(ws[i2 + 1] & 1));
-                uint32_t s = (resShift & ((xe[i] - xe1[i]) >> 8));
-                factor = ((((ws[i2] >> 1) * (xe[i] - xe1[i])) << (9 - s)) /
-                    ((ws[i2 + 1] >> 1) * (xe2[i] - xe[i]) + wa * (xe[i] - xe1[i]))) << s;
+                factor = (uint64_t((ws[i2] >> 1) * (xe[i] - xe1[i])) << 9) /
+                    ((ws[i2 + 1] >> 1) * (xe2[i] - xe[i]) + wa * (xe[i] - xe1[i]));
             }
 
             // Interpolate the W value of a polygon edge using a factor
@@ -1060,27 +1075,16 @@ void Gpu3DRenderer::drawPolygon(int line, int polygonIndex)
 
         // Calculate the interpolation factor with a precision of 8 bits for polygon fills
         uint32_t factor;
-        if (we[0] == we[1] && !(we[0] & 0x007F))
-        {
-            // Fall back to linear interpolation if the W values are equal and their lower bits are clear
+        if (we[0] == we[1] && !(we[0] & 0x7F)) // Linear fallback
             factor = -1;
-        }
-        else if (x <= x1)
-        {
-            // Clamp to the minimum value
+        else if (x <= x1) // Clamp min
             factor = 0;
-        }
-        else if (x >= x4)
-        {
-            // Clamp to the maximum value
+        else if (x >= x4) // Clamp max
             factor = (1 << 8);
-        }
-        else
-        {
-            // Adjust interpolation precision to avoid overflow in high-res mode
-            uint32_t s = (resShift & ((x - x1) >> 8));
-            factor = (((we[0] * (x - x1)) << (8 - s)) / (we[1] * (x4 - x) + we[0] * (x - x1))) << s;
-        }
+        else if (resShift && ((x - x1) >> 8)) // 64-bit for upscaling
+            factor = (uint64_t(we[0] * (x - x1)) << 8) / (we[1] * (x4 - x) + we[0] * (x - x1));
+        else // 32-bit
+            factor = ((we[0] * (x - x1)) << 8) / (we[1] * (x4 - x) + we[0] * (x - x1));
 
         // Calculate the depth value of the current pixel
         int32_t depth;

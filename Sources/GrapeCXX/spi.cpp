@@ -1,5 +1,5 @@
 /*
-    Copyright 2019-2023 Hydr8gon
+    Copyright 2019-2024 Hydr8gon
 
     This file is part of NooDS.
 
@@ -30,6 +30,26 @@ Spi::~Spi()
     // Free any dynamic memory
     if (firmware)  delete[] firmware;
     if (micBuffer) delete[] micBuffer;
+}
+
+void Spi::saveState(FILE *file)
+{
+    // Write state data to the file
+    fwrite(&writeCount, sizeof(writeCount), 1, file);
+    fwrite(&address, sizeof(address), 1, file);
+    fwrite(&command, sizeof(command), 1, file);
+    fwrite(&spiCnt, sizeof(spiCnt), 1, file);
+    fwrite(&spiData, sizeof(spiData), 1, file);
+}
+
+void Spi::loadState(FILE *file)
+{
+    // Read state data from the file
+    fread(&writeCount, sizeof(writeCount), 1, file);
+    fread(&address, sizeof(address), 1, file);
+    fread(&command, sizeof(command), 1, file);
+    fread(&spiCnt, sizeof(spiCnt), 1, file);
+    fread(&spiData, sizeof(spiData), 1, file);
 }
 
 uint16_t Spi::crc16(uint32_t value, uint8_t *data, size_t size)
@@ -67,7 +87,7 @@ bool Spi::loadFirmware()
         {
             // Increment the MAC address based on the instance ID
             // This allows instances to be detected as separate systems
-            firmware[0x36] += core->id;
+            firmware[0x3B] += core->id;
 
             // Recalculate the WiFi config CRC
             uint16_t crc = crc16(0, &firmware[0x2C], 0x138);
@@ -90,12 +110,12 @@ bool Spi::loadFirmware()
     // Set some WiFi config data
     firmware[0x2C] = 0x38; // Config length, byte 1
     firmware[0x2D] = 0x01; // Config length, byte 2
-    firmware[0x36] = core->id; // MAC address, byte 1
+    firmware[0x36] = 0x00; // MAC address, byte 1
     firmware[0x37] = 0x09; // MAC address, byte 2
     firmware[0x38] = 0xBF; // MAC address, byte 3
     firmware[0x39] = 0x12; // MAC address, byte 4
     firmware[0x3A] = 0x34; // MAC address, byte 5
-    firmware[0x3B] = 0x56; // MAC address, byte 6
+    firmware[0x3B] = core->id; // MAC address, byte 6
     firmware[0x3C] = 0xFE; // Enabled channels, byte 1
     firmware[0x3D] = 0x3F; // Enabled channels, byte 2
 
