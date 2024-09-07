@@ -29,6 +29,9 @@ NS_ASSUME_NONNULL_BEGIN
 -(void) insertGame:(NSURL *)url NS_SWIFT_NAME(insert(game:));
 -(void) updateScreenLayout:(CGSize)size;
 
+-(BOOL) togglePause;
+-(void) stop;
+
 -(void) step;
 -(int16_t*) audioBuffer;
 -(void) microphoneBuffer:(int16_t*)buffer;
@@ -41,6 +44,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 -(void) virtualControllerButtonDown:(int)button;
 -(void) virtualControllerButtonUp:(int)button;
+
+-(void) updateSettings;
 @end
 
 NS_ASSUME_NONNULL_END

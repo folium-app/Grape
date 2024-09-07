@@ -29,7 +29,7 @@ int Settings::threaded3D = 1;
 int Settings::highRes3D = 0;
 int Settings::screenFilter = 2;
 int Settings::screenGhost = 0;
-int Settings::savesFolder = 0;
+int Settings::savesFolder = 1;
 int Settings::statesFolder = 1;
 int Settings::cheatsFolder = 1;
 
@@ -80,6 +80,7 @@ bool Settings::load(std::string path)
     FILE *file = fopen((basePath + "/config/config.ini").c_str(), "r");
     if (!file)
     {
+        Settings::basePath = basePath;
         Settings::bios9Path = basePath + "/sysdata/bios9.bin";
         Settings::bios7Path = basePath + "/sysdata/bios7.bin";
         Settings::firmwarePath = basePath + "/sysdata/firmware.bin";

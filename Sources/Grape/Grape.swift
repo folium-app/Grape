@@ -21,6 +21,14 @@ public struct Grape : @unchecked Sendable {
         grapeObjC.updateScreenLayout(size)
     }
     
+    public func togglePause() -> Bool {
+        grapeObjC.togglePause()
+    }
+    
+    public func stop() {
+        grapeObjC.stop()
+    }
+    
     public func step() {
         grapeObjC.step()
     }
@@ -59,5 +67,9 @@ public struct Grape : @unchecked Sendable {
     
     public func virtualControllerButtonUp(_ button: Int32) {
         grapeObjC.virtualControllerButtonUp(button)
+    }
+    
+    public func updateSettings() {
+        grapeObjC.updateSettings()
     }
 }

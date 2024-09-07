@@ -28,6 +28,23 @@ ScreenLayout layout;
         if (!Settings::load([grapeDirectory.path UTF8String])) {
             ScreenLayout::addSettings();
             Settings::save();
+        } else {
+            std::string basePath = [grapeDirectory.path UTF8String];
+            Settings::basePath = basePath;
+            Settings::bios9Path = basePath + "/sysdata/bios9.bin";
+            Settings::bios7Path = basePath + "/sysdata/bios7.bin";
+            Settings::firmwarePath = basePath + "/sysdata/firmware.bin";
+            Settings::gbaBiosPath = basePath + "/sysdata/gba_bios.bin";
+            Settings::sdImagePath = basePath + "/sysdata/sd.img";
+            
+            NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+            
+            Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
+            Settings::threaded2D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded2D"]] intValue];
+            Settings::threaded3D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded3D"]] intValue];
+            
+            ScreenLayout::addSettings();
+            Settings::save();
         }
     } return self;
 }
@@ -70,6 +87,15 @@ ScreenLayout layout;
     NSString *gameName = [url.lastPathComponent stringByReplacingOccurrencesOfString:url.pathExtension withString:@"sav"];
     const char* saveName = [[savesDirectory URLByAppendingPathComponent:gameName].path UTF8String];
     
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    
+    Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
+    Settings::threaded2D = [[NSNumber numberWithBool:[defaults boolForKey:@"grape.threaded2D"]] intValue];
+    Settings::threaded3D = [[NSNumber numberWithBool:[defaults boolForKey:@"grape.threaded3D"]] intValue];
+    
+    if (grapeEmulator)
+        grapeEmulator.reset();
+    
     isGBA = [url.pathExtension.lowercaseString isEqualToString:@"gba"];
     if (url && [url.pathExtension.lowercaseString isEqualToString:@"nds"]) {
         grapeEmulator = std::make_unique<Core>([url.path UTF8String]);
@@ -78,16 +104,26 @@ ScreenLayout layout;
     } else {
         grapeEmulator = std::make_unique<Core>("", "");
     }
+    
+    stop_run = false;
+    pause_emulation = false;
 }
 
 -(void) updateScreenLayout:(CGSize)size {
     layout.update(size.width, size.height, isGBA);
 }
 
+-(BOOL) togglePause {
+    pause_emulation = !pause_emulation;
+    return pause_emulation;
+}
+
+-(void) stop {
+    stop_run = true;
+    pause_emulation = true;
+}
+
 -(void) step {
-    stop_run = false;
-    pause_emulation = false;
-    
     if (!pause_emulation) {
         grapeEmulator->runFrame();
         if (isGBA)
@@ -158,5 +194,13 @@ ScreenLayout layout;
 
 -(void) virtualControllerButtonUp:(int)button {
     grapeEmulator->input.releaseKey(button);
+}
+
+-(void) updateSettings {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    
+    Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
+    Settings::threaded2D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded2D"]] intValue];
+    Settings::threaded3D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded3D"]] intValue];
 }
 @end

@@ -26,7 +26,11 @@ let package = Package(
         ]),
         .target(name: "GrapeCXX", sources: [
             "", "common"
-        ], publicHeadersPath: "include"),
+        ], publicHeadersPath: "include", cxxSettings: [
+            .unsafeFlags([
+                "-Wno-conversion"
+            ])
+        ]),
         .target(name: "GrapeObjC", dependencies: [
             "GrapeCXX"
         ], publicHeadersPath: "include")
