@@ -967,6 +967,9 @@ uint32_t CartridgeNds::readRomDataIn(bool cpu)
     // Return a value from the cart depending on the current command
     switch (cmdMode)
     {
+        case CMD_NONE: {
+            return 0xFFFFFFFF;
+        }
         case CMD_HEADER:
         {
             // Read the ROM header, repeated every 0x1000 bytes

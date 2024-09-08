@@ -33,7 +33,11 @@ let package = Package(
         ]),
         .target(name: "GrapeObjC", dependencies: [
             "GrapeCXX"
-        ], publicHeadersPath: "include")
+        ], publicHeadersPath: "include", cxxSettings: [
+            .unsafeFlags([
+                "-Wno-conversion"
+            ])
+        ])
     ],
     cLanguageStandard: .c2x,
     cxxLanguageStandard: .cxx2b
