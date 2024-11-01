@@ -25,13 +25,13 @@
 
 class NdsIcon
 {
-public:
-    NdsIcon(std::string path, int fd = -1);
-    
-    uint32_t *getIcon() { return icon; }
-    
-private:
-    uint32_t icon[32 * 32];
+    public:
+        NdsIcon(std::string path, int fd = -1);
+
+        uint32_t *getIcon() { return icon; }
+
+    private:
+        uint32_t icon[32 * 32];
 };
 
 #endif // NDS_ICON_H
