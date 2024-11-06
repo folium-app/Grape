@@ -42,6 +42,7 @@ ScreenLayout layout;
             Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
             Settings::threaded2D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded2D"]] intValue];
             Settings::threaded3D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded3D"]] intValue];
+            Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
             
             ScreenLayout::addSettings();
             Settings::save();
@@ -68,17 +69,17 @@ ScreenLayout layout;
 -(NSString *) titleForGameAtURL:(NSURL *)url {
     FILE* rom = fopen([url.path UTF8String], "rb");
     
-    uint8_t offset[0x04];
+    uint32_t iconTitleOffset = 0;
     fseek(rom, 0x68, SEEK_SET);
-    fread(offset, sizeof(uint8_t), 4, rom);
+    fread(&iconTitleOffset, sizeof(uint32_t), 1, rom);
     
-    uint16_t title[0x100];
-    fseek(rom, U8TO32(offset, 0) + 0x340, SEEK_SET);
-    fread(title, sizeof(uint16_t), 0x100, rom);
-    
+    uint16_t title[128] = {0};
+    fseek(rom, iconTitleOffset + 0x340, SEEK_SET);
+    fread(title, sizeof(uint16_t), 128, rom);
     fclose(rom);
-    
-    NSString *string = [NSString stringWithCharacters:(const unichar*)title length:0x100];
+
+    // Create an NSString from the UTF-16 title
+    NSString *string = [NSString stringWithCharacters:(const unichar*)title length:128];
     return string;
 }
 
@@ -202,5 +203,6 @@ ScreenLayout layout;
     Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
     Settings::threaded2D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded2D"]] intValue];
     Settings::threaded3D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded3D"]] intValue];
+    Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
 }
 @end
