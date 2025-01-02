@@ -61,12 +61,12 @@ public struct Grape : @unchecked Sendable {
         grapeObjC.touchMoved(at: point)
     }
     
-    public func virtualControllerButtonDown(_ button: Int32) {
-        grapeObjC.virtualControllerButtonDown(button)
-    }
-    
-    public func virtualControllerButtonUp(_ button: Int32) {
-        grapeObjC.virtualControllerButtonUp(button)
+    public func input(_ button: Int32, _ pressed: Bool) {
+        if pressed {
+            grapeObjC.virtualControllerButtonDown(button)
+        } else {
+            grapeObjC.virtualControllerButtonUp(button)
+        }
     }
     
     public func updateSettings() {
