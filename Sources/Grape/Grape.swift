@@ -10,11 +10,11 @@ public struct Grape : @unchecked Sendable {
     fileprivate let grapeObjC = GrapeObjC.shared()
     
     public func informationForGame(at url: URL) -> (icon: UnsafeMutablePointer<UInt32>, title: String) {
-        (grapeObjC.iconForGame(at: url), grapeObjC.titleForGame(at: url))
+        (grapeObjC.iconForCartridge(at: url), grapeObjC.titleForCartridge(at: url))
     }
     
-    public func insertCartridge(from url: URL) {
-        grapeObjC.insert(game: url)
+    public func insertCartridge(from url: URL) -> CartridgeType {
+        grapeObjC.insertCartridge(at: url)
     }
     
     public func updateScreenLayout(with size: CGSize) {

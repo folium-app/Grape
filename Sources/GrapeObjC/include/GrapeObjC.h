@@ -13,6 +13,11 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef NS_ENUM(NSUInteger, CartridgeType) {
+    GBA,
+    NDS
+};
+
 @interface GrapeObjC : NSObject {
 #ifdef __cplusplus
     std::atomic_bool stop_run;
@@ -23,10 +28,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 +(GrapeObjC *) sharedInstance NS_SWIFT_NAME(shared());
 
--(uint32_t*) iconForGameAtURL:(NSURL *)url;
--(NSString *) titleForGameAtURL:(NSURL *)url;
+-(uint32_t*) iconForCartridge:(NSURL *)url NS_SWIFT_NAME(iconForCartridge(at:));
+-(NSString *) titleForCartridge:(NSURL *)url NS_SWIFT_NAME(titleForCartridge(at:));
 
--(void) insertGame:(NSURL *)url NS_SWIFT_NAME(insert(game:));
+-(CartridgeType) insertCartridge:(NSURL *)url NS_SWIFT_NAME(insertCartridge(at:));
 -(void) updateScreenLayout:(CGSize)size;
 
 -(BOOL) togglePause;

@@ -25,28 +25,23 @@ ScreenLayout layout;
         NSURL *documentsDirectory = [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] firstObject];
         NSURL *grapeDirectory = [documentsDirectory URLByAppendingPathComponent:@"Grape"];
         
-        if (!Settings::load([grapeDirectory.path UTF8String])) {
-            ScreenLayout::addSettings();
-            Settings::save();
-        } else {
-            std::string basePath = [grapeDirectory.path UTF8String];
-            Settings::basePath = basePath;
-            Settings::bios9Path = basePath + "/sysdata/bios9.bin";
-            Settings::bios7Path = basePath + "/sysdata/bios7.bin";
-            Settings::firmwarePath = basePath + "/sysdata/firmware.bin";
-            Settings::gbaBiosPath = basePath + "/sysdata/gba_bios.bin";
-            Settings::sdImagePath = basePath + "/sysdata/sd.img";
-            
-            NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-            
-            Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
-            Settings::threaded2D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded2D"]] intValue];
-            Settings::threaded3D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded3D"]] intValue];
-            Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
-            
-            ScreenLayout::addSettings();
-            Settings::save();
-        }
+        std::string basePath = [grapeDirectory.path UTF8String];
+        Settings::basePath = basePath;
+        Settings::bios9Path = basePath + "/sysdata/bios9.bin";
+        Settings::bios7Path = basePath + "/sysdata/bios7.bin";
+        Settings::firmwarePath = basePath + "/sysdata/firmware.bin";
+        Settings::gbaBiosPath = basePath + "/sysdata/gba_bios.bin";
+        Settings::sdImagePath = basePath + "/sysdata/sd.img";
+        
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        
+        Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
+        Settings::threaded2D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded2D"]] intValue];
+        Settings::threaded3D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded3D"]] intValue];
+        Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
+        
+        ScreenLayout::addSettings();
+        Settings::save();
     } return self;
 }
 
@@ -59,14 +54,14 @@ ScreenLayout layout;
     return sharedInstance;
 }
 
--(uint32_t*) iconForGameAtURL:(NSURL *)url {
+-(uint32_t*) iconForCartridge:(NSURL *)url {
     NdsIcon icon([url.path UTF8String]);
     uint32_t* data = new uint32_t[32 * 32];
     memcpy(data, icon.getIcon(), 32 * 32 * sizeof(uint32_t));
     return data;
 }
 
--(NSString *) titleForGameAtURL:(NSURL *)url {
+-(NSString *) titleForCartridge:(NSURL *)url {
     FILE* rom = fopen([url.path UTF8String], "rb");
     
     uint32_t iconTitleOffset = 0;
@@ -83,31 +78,27 @@ ScreenLayout layout;
     return string;
 }
 
--(void) insertGame:(NSURL *)url {
-    NSURL *savesDirectory = [[[url URLByDeletingLastPathComponent] URLByDeletingLastPathComponent] URLByAppendingPathComponent:@"saves"];
-    NSString *gameName = [url.lastPathComponent stringByReplacingOccurrencesOfString:url.pathExtension withString:@"sav"];
-    const char* saveName = [[savesDirectory URLByAppendingPathComponent:gameName].path UTF8String];
-    
+-(CartridgeType) insertCartridge:(NSURL *)url {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
     Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
     Settings::threaded2D = [[NSNumber numberWithBool:[defaults boolForKey:@"grape.threaded2D"]] intValue];
     Settings::threaded3D = [[NSNumber numberWithBool:[defaults boolForKey:@"grape.threaded3D"]] intValue];
+    Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
     
     if (grapeEmulator)
         grapeEmulator.reset();
     
     isGBA = [url.pathExtension.lowercaseString isEqualToString:@"gba"];
-    if (url && [url.pathExtension.lowercaseString isEqualToString:@"nds"]) {
-        grapeEmulator = std::make_unique<Core>([url.path UTF8String]);
-    } else if (url && [url.pathExtension.lowercaseString isEqualToString:@"gba"]) {
+    if (isGBA)
         grapeEmulator = std::make_unique<Core>("", [url.path UTF8String]);
-    } else {
-        grapeEmulator = std::make_unique<Core>("", "");
-    }
+    else
+        grapeEmulator = std::make_unique<Core>([url.path UTF8String], "");
     
     stop_run = false;
     pause_emulation = false;
+    
+    return isGBA ? GBA : NDS;
 }
 
 -(void) updateScreenLayout:(CGSize)size {
@@ -170,7 +161,7 @@ ScreenLayout layout;
 
 -(void) touchBeganAtPoint:(CGPoint)point {
     grapeEmulator->input.pressScreen();
-        
+    
     auto x = layout.getTouchX(point.x, point.y);
     auto y = layout.getTouchY(point.x, point.y);
     
