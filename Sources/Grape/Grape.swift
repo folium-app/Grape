@@ -9,8 +9,8 @@ public struct Grape : @unchecked Sendable {
     
     fileprivate let grapeObjC = GrapeObjC.shared()
     
-    public func informationForGame(at url: URL) -> (icon: UnsafeMutablePointer<UInt32>, title: String) {
-        (grapeObjC.iconForCartridge(at: url), grapeObjC.titleForCartridge(at: url))
+    public func information(for cartridge: URL) -> (icon: UnsafeMutablePointer<UInt32>, title: String) {
+        (grapeObjC.iconForCartridge(at: cartridge), grapeObjC.titleForCartridge(at: cartridge))
     }
     
     public func insertCartridge(from url: URL) -> CartridgeType {
@@ -21,17 +21,17 @@ public struct Grape : @unchecked Sendable {
         grapeObjC.updateScreenLayout(size)
     }
     
-    public func togglePause() -> Bool {
-        grapeObjC.togglePause()
+    public func pause() {
+        grapeObjC.pause()
     }
     
     public func stop() {
         grapeObjC.stop()
     }
     
-    public func step() {
-        grapeObjC.step()
-    }
+    public func start() { grapeObjC.start() }
+    
+    public func running() -> Bool { grapeObjC.running() }
     
     public func audioBuffer() -> UnsafeMutablePointer<Int16> {
         grapeObjC.audioBuffer()
@@ -41,9 +41,7 @@ public struct Grape : @unchecked Sendable {
         grapeObjC.microphoneBuffer(buffer)
     }
         
-    public func videoBuffer() -> UnsafeMutablePointer<UInt32> {
-        grapeObjC.videoBuffer()
-    }
+    public func framebuffer(_ framebuffer: @escaping (UnsafeMutablePointer<UInt32>) -> Void) { grapeObjC.buffer = framebuffer }
     
     public func videoBufferSize() -> CGSize {
         grapeObjC.videoBufferSize()
@@ -72,4 +70,7 @@ public struct Grape : @unchecked Sendable {
     public func updateSettings() {
         grapeObjC.updateSettings()
     }
+    
+    public func loadState() { grapeObjC.loadState() }
+    public func saveState() { grapeObjC.saveState() }
 }

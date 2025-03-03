@@ -18,6 +18,8 @@
 
 std::unique_ptr<Core> grapeEmulator;
 ScreenLayout layout;
+std::condition_variable cv;
+std::mutex mx;
 
 @implementation GrapeObjC
 -(GrapeObjC *) init {
@@ -89,14 +91,17 @@ ScreenLayout layout;
     if (grapeEmulator)
         grapeEmulator.reset();
     
+    self->url = url;
+    
+    
     isGBA = [url.pathExtension.lowercaseString isEqualToString:@"gba"];
     if (isGBA)
         grapeEmulator = std::make_unique<Core>("", [url.path UTF8String]);
     else
         grapeEmulator = std::make_unique<Core>([url.path UTF8String], "");
     
-    stop_run = false;
-    pause_emulation = false;
+    NSURL *directory = [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] firstObject];
+    grapeEmulator->saveStates.setPath([[[[directory URLByAppendingPathComponent:@"Grape"] URLByAppendingPathComponent:@"states"] URLByAppendingPathComponent:[[[url lastPathComponent] stringByDeletingPathExtension] stringByAppendingPathComponent:@".state"]].path UTF8String], isGBA);
     
     return isGBA ? GBA : NDS;
 }
@@ -105,24 +110,87 @@ ScreenLayout layout;
     layout.update(size.width, size.height, isGBA);
 }
 
--(BOOL) togglePause {
-    pause_emulation = !pause_emulation;
-    return pause_emulation;
+-(void) stopCore:(BOOL)full {
+    {
+        std::lock_guard<std::mutex> guard(mx);
+        isRunning = false;
+        cv.notify_one();
+    }
+    
+    // Wait for the core thread to stop
+    if (coreThread)
+    {
+        coreThread->join();
+        delete coreThread;
+        coreThread = nullptr;
+    }
+    
+    // Wait for the save thread to stop
+    if (saveThread)
+    {
+        saveThread->join();
+        delete saveThread;
+        saveThread = nullptr;
+    }
+    
+    if (full) {
+        if (grapeEmulator) {
+            grapeEmulator.reset();
+        }
+    }
+}
+
+-(void) startCore:(BOOL)full {
+    if (full) {
+        [self stopCore:full];
+        
+        try {
+            isGBA = [url.pathExtension.lowercaseString isEqualToString:@"gba"];
+            if (isGBA)
+                grapeEmulator = std::make_unique<Core>("", [url.path UTF8String]);
+            else
+                grapeEmulator = std::make_unique<Core>([url.path UTF8String], "");
+        } catch (CoreError error) {
+            NSLog(@"error = %u", error);
+        }
+    }
+    
+    if (grapeEmulator) {
+        isRunning = true;
+        coreThread = new std::thread([]() {
+            while ([[GrapeObjC sharedInstance] running]) {
+                grapeEmulator->runFrame();
+             
+                if (auto buf = [[GrapeObjC sharedInstance] buffer])
+                    buf([[GrapeObjC sharedInstance] videoBuffer]);
+            }
+        });
+        
+        saveThread = new std::thread([&]() {
+            while ([[GrapeObjC sharedInstance] running]) {
+                std::unique_lock<std::mutex> lock(mx);
+                cv.wait_for(lock, std::chrono::seconds(3), [&]{ return ![[GrapeObjC sharedInstance] running]; });
+                grapeEmulator->cartridgeNds.writeSave();
+                grapeEmulator->cartridgeGba.writeSave();
+            }
+        });
+    }
+}
+
+-(BOOL) running {
+    return isRunning;
+}
+
+-(void) pause {
+    isRunning ? [self stopCore:false] : [self startCore:false];
 }
 
 -(void) stop {
-    stop_run = true;
-    pause_emulation = true;
+    [self stopCore:true];
 }
 
--(void) step {
-    if (!pause_emulation) {
-        grapeEmulator->runFrame();
-        if (isGBA)
-            grapeEmulator->cartridgeGba.writeSave();
-        else
-            grapeEmulator->cartridgeNds.writeSave();
-    }
+-(void) start {
+    [self startCore:true];
 }
 
 -(int16_t *) audioBuffer {
@@ -157,6 +225,48 @@ ScreenLayout layout;
         return {240, 160};
     else
         return {256, 192};
+}
+
+-(void) loadState {
+    switch (grapeEmulator->saveStates.checkState()) {
+        case STATE_SUCCESS:
+            NSLog(@"[%s] success", __FUNCTION__);
+            break;
+        case STATE_FILE_FAIL:
+            NSLog(@"[%s] file fail", __FUNCTION__);
+            break;
+        case STATE_FORMAT_FAIL:
+            NSLog(@"[%s] format fail", __FUNCTION__);
+            break;
+        case STATE_VERSION_FAIL:
+            NSLog(@"[%s] version fail", __FUNCTION__);
+            break;
+    }
+    
+    [self stopCore:false];
+    grapeEmulator->saveStates.loadState();
+    [self startCore:false];
+}
+
+-(void) saveState {
+    switch (grapeEmulator->saveStates.checkState()) {
+        case STATE_SUCCESS:
+            NSLog(@"[%s] success", __FUNCTION__);
+            break;
+        case STATE_FILE_FAIL:
+            NSLog(@"[%s] file fail", __FUNCTION__);
+            break;
+        case STATE_FORMAT_FAIL:
+            NSLog(@"[%s] format fail", __FUNCTION__);
+            break;
+        case STATE_VERSION_FAIL:
+            NSLog(@"[%s] version fail", __FUNCTION__);
+            break;
+    }
+    
+    [self stopCore:false];
+    grapeEmulator->saveStates.saveState();
+    [self startCore:false];
 }
 
 -(void) touchBeganAtPoint:(CGPoint)point {
