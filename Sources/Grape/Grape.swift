@@ -7,70 +7,70 @@ import GrapeObjC
 public struct Grape : @unchecked Sendable {
     public static let shared = Grape()
     
-    fileprivate let grapeObjC = GrapeObjC.shared()
+    fileprivate let emulator = GrapeObjC.shared()
     
     public func information(for cartridge: URL) -> (icon: UnsafeMutablePointer<UInt32>, title: String) {
-        (grapeObjC.iconForCartridge(at: cartridge), grapeObjC.titleForCartridge(at: cartridge))
+        (emulator.iconForCartridge(at: cartridge), emulator.titleForCartridge(at: cartridge))
     }
     
     public func insertCartridge(from url: URL) -> CartridgeType {
-        grapeObjC.insertCartridge(at: url)
+        emulator.insertCartridge(at: url)
     }
     
     public func updateScreenLayout(with size: CGSize) {
-        grapeObjC.updateScreenLayout(size)
+        emulator.updateScreenLayout(size)
     }
     
     public func pause() {
-        grapeObjC.pause()
+        emulator.pause()
     }
     
     public func stop() {
-        grapeObjC.stop()
+        emulator.stop()
     }
     
-    public func start() { grapeObjC.start() }
+    public func start() { emulator.start() }
     
-    public func running() -> Bool { grapeObjC.running() }
+    public func running() -> Bool { emulator.running() }
     
     public func audioBuffer() -> UnsafeMutablePointer<Int16> {
-        grapeObjC.audioBuffer()
+        emulator.audioBuffer()
     }
     
     public func microphoneBuffer(with buffer: UnsafeMutablePointer<Int16>) {
-        grapeObjC.microphoneBuffer(buffer)
+        emulator.microphoneBuffer(buffer)
     }
         
-    public func framebuffer(_ framebuffer: @escaping (UnsafeMutablePointer<UInt32>) -> Void) { grapeObjC.buffer = framebuffer }
+    public func framebuffer(_ framebuffer: @escaping (UnsafeMutablePointer<UInt32>) -> Void) { emulator.buffer = framebuffer }
     
     public func videoBufferSize() -> CGSize {
-        grapeObjC.videoBufferSize()
+        emulator.videoBufferSize()
     }
     
     public func touchBegan(at point: CGPoint) {
-        grapeObjC.touchBegan(at: point)
+        emulator.touchBegan(at: point)
     }
     
     public func touchEnded() {
-        grapeObjC.touchEnded()
+        emulator.touchEnded()
     }
     
     public func touchMoved(at point: CGPoint) {
-        grapeObjC.touchMoved(at: point)
+        emulator.touchMoved(at: point)
     }
     
     public func input(_ button: Int32, _ pressed: Bool) {
         if pressed {
-            grapeObjC.virtualControllerButtonDown(button)
+            emulator.virtualControllerButtonDown(button)
         } else {
-            grapeObjC.virtualControllerButtonUp(button)
+            emulator.virtualControllerButtonUp(button)
         }
     }
     
     public func updateSettings() {
-        grapeObjC.updateSettings()
+        emulator.updateSettings()
     }
     
-    public func loadState() { grapeObjC.loadState() }
-    public func saveState() { grapeObjC.saveState() }
+    public func loadState(_ completionHandler: @escaping (Bool) -> Void) { completionHandler(emulator.loadState()) }
+    public func saveState(_ completionHandler: @escaping (Bool) -> Void) { completionHandler(emulator.saveState()) }
 }

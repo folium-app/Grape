@@ -54,8 +54,8 @@ typedef NS_ENUM(NSUInteger, CartridgeType) {
 -(uint32_t*) videoBuffer;
 -(CGSize) videoBufferSize;
 
--(void) loadState;
--(void) saveState;
+-(BOOL) loadState;
+-(BOOL) saveState;
 
 -(void) touchBeganAtPoint:(CGPoint)point;
 -(void) touchEnded;

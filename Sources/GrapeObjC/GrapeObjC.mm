@@ -227,7 +227,7 @@ std::mutex mx;
         return {256, 192};
 }
 
--(void) loadState {
+-(BOOL) loadState {
     switch (grapeEmulator->saveStates.checkState()) {
         case STATE_SUCCESS:
             NSLog(@"[%s] success", __FUNCTION__);
@@ -244,11 +244,12 @@ std::mutex mx;
     }
     
     [self stopCore:false];
-    grapeEmulator->saveStates.loadState();
+    auto result = grapeEmulator->saveStates.loadState();
     [self startCore:false];
+    return result;
 }
 
--(void) saveState {
+-(BOOL) saveState {
     switch (grapeEmulator->saveStates.checkState()) {
         case STATE_SUCCESS:
             NSLog(@"[%s] success", __FUNCTION__);
@@ -265,8 +266,9 @@ std::mutex mx;
     }
     
     [self stopCore:false];
-    grapeEmulator->saveStates.saveState();
+    auto result = grapeEmulator->saveStates.saveState();
     [self startCore:false];
+    return result;
 }
 
 -(void) touchBeganAtPoint:(CGPoint)point {
