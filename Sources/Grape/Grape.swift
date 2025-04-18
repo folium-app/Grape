@@ -41,7 +41,7 @@ public struct Grape : @unchecked Sendable {
         emulator.microphoneBuffer(buffer)
     }
         
-    public func framebuffer(_ framebuffer: @escaping (UnsafeMutablePointer<UInt32>) -> Void) { emulator.buffer = framebuffer }
+    public func fbs(_ buf: @escaping (UnsafeMutablePointer<UInt32>, UnsafeMutablePointer<UInt32>) -> Void) { emulator.fbs = buf }
     
     public func videoBufferSize() -> CGSize {
         emulator.videoBufferSize()

@@ -40,7 +40,7 @@ std::mutex mx;
         Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
         Settings::threaded2D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded2D"]] intValue];
         Settings::threaded3D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded3D"]] intValue];
-        Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
+        //Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
         
         ScreenLayout::addSettings();
         Settings::save();
@@ -86,7 +86,7 @@ std::mutex mx;
     Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
     Settings::threaded2D = [[NSNumber numberWithBool:[defaults boolForKey:@"grape.threaded2D"]] intValue];
     Settings::threaded3D = [[NSNumber numberWithBool:[defaults boolForKey:@"grape.threaded3D"]] intValue];
-    Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
+    //Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
     
     if (grapeEmulator)
         grapeEmulator.reset();
@@ -161,8 +161,15 @@ std::mutex mx;
             while ([[GrapeObjC sharedInstance] running]) {
                 grapeEmulator->runFrame();
              
-                if (auto buf = [[GrapeObjC sharedInstance] buffer])
-                    buf([[GrapeObjC sharedInstance] videoBuffer]);
+                if (auto buffers = [[GrapeObjC sharedInstance] fbs]) {
+                    std::vector<uint32_t> buf(256 * (192 * 2));
+                    auto fb = grapeEmulator->gpu.getFrame(buf.data(), grapeEmulator->gbaMode);
+                    
+                    std::vector<uint32_t> lo(buf.begin(), buf.begin() + 256 * 192);
+                    std::vector<uint32_t> hi(buf.begin() + 256 * 192, buf.end());
+                    
+                    buffers(lo.data(), hi.data());
+                }
             }
         });
         
@@ -207,17 +214,6 @@ std::mutex mx;
 
 -(void) microphoneBuffer:(int16_t *)buffer {
     grapeEmulator->spi.sendMicData(buffer, 1024, 48000);
-}
-
--(uint32_t *) videoBuffer {
-    static std::vector<uint32_t> framebuffer;
-    if (isGBA)
-        framebuffer.resize(240 * 160);
-    else
-        framebuffer.resize(256 * 192 * 2);
-    grapeEmulator->gpu.getFrame(framebuffer.data(), isGBA);
-    
-    return framebuffer.data();
 }
 
 -(CGSize) videoBufferSize {
@@ -306,6 +302,6 @@ std::mutex mx;
     Settings::directBoot = [defaults boolForKey:@"grape.directBoot"];
     Settings::threaded2D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded2D"]] intValue];
     Settings::threaded3D = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.threaded3D"]] intValue];
-    Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
+    //Settings::dsiMode = [[NSNumber numberWithInteger:[defaults integerForKey:@"grape.dsiMode"]] intValue];
 }
 @end

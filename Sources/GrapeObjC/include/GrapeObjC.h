@@ -30,7 +30,7 @@ typedef NS_ENUM(NSUInteger, CartridgeType) {
     NSURL *url;
 }
 
-@property (nonatomic, strong) void (^buffer) (uint32_t*);
+@property (nonatomic, strong, nullable) void (^fbs) (uint32_t*, uint32_t*);
 
 +(GrapeObjC *) sharedInstance NS_SWIFT_NAME(shared());
 
@@ -51,7 +51,6 @@ typedef NS_ENUM(NSUInteger, CartridgeType) {
 
 -(int16_t*) audioBuffer;
 -(void) microphoneBuffer:(int16_t*)buffer;
--(uint32_t*) videoBuffer;
 -(CGSize) videoBufferSize;
 
 -(BOOL) loadState;
