@@ -379,7 +379,7 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
     NSURL *nandi = [sysdataDirectory() URLByAppendingPathComponent:@"nandi.bin"];
     
     if (fileExists(bios7i) && fileExists(bios9i) && fileExists(firmwarei) && fileExists(nandi)) {
-        NDS::SetConsoleType([[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.30.dsiMode"] ? ConsoleType::ConsoleTypeDSi : ConsoleType::ConsoleTypeNDS);
+        NDS::SetConsoleType([[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.35.dsiMode"] ? ConsoleType::ConsoleTypeDSi : ConsoleType::ConsoleTypeNDS);
         
         Config::DSiBIOS7Path = [bios7i.path UTF8String];
         Config::DSiBIOS9Path = [bios9i.path UTF8String];
@@ -388,7 +388,7 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
     } else
         NDS::SetConsoleType(ConsoleType::ConsoleTypeNDS);
     
-    Config::DirectBoot = [[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.30.directBoot"];
+    Config::DirectBoot = [[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.35.directBoot"];
     Config::ExternalBIOSEnable = YES;
     
     NDS::Init();
@@ -553,9 +553,9 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
 -(void) updateSettings {
     NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
     
-    Config::DirectBoot = [userDefaults boolForKey:@"grape.v1.30.directBoot"];
+    Config::DirectBoot = [userDefaults boolForKey:@"grape.v1.35.directBoot"];
     
-    NDS::SetConsoleType([userDefaults boolForKey:@"grape.v1.30.dsiMode"] ? ConsoleType::ConsoleTypeDSi : ConsoleType::ConsoleTypeNDS);
+    NDS::SetConsoleType([userDefaults boolForKey:@"grape.v1.35.dsiMode"] ? ConsoleType::ConsoleTypeDSi : ConsoleType::ConsoleTypeNDS);
 }
 @end
 
