@@ -16,7 +16,7 @@
     with melonDS. If not, see http://www.gnu.org/licenses/.
 */
 
-#include "teakra/teakra.h"
+#include <teakra/teakra.h>
 
 #include "melonDS/DSi.h"
 #include "melonDS/DSi_DSP.h"
@@ -126,7 +126,7 @@ void AudioCb(std::array<s16, 2> frame)
 
 bool Init()
 {
-    TeakraCore = new Teakra::Teakra();
+    TeakraCore = new Teakra::Teakra(Teakra::UserConfig{});
     SCFG_RST = false;
 
     if (!TeakraCore) return false;
