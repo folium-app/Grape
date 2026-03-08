@@ -12,39 +12,32 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface GrapeEmulator : NSObject {
-    uint32_t inputs;
-    NSURL *_url;
-}
-
-@property (nonatomic, strong, nullable) void (^ab) (int16_t*, int);
-@property (nonatomic, strong, nullable) void (^fbs) (uint32_t*, uint32_t*);
+@interface GrapeEmulator : NSObject
+@property (nonatomic, strong, nullable) void (^audioCallback) (int16_t*, NSInteger);
+@property (nonatomic, strong, nullable) void (^videoCallback) (uint32_t*, uint32_t*);
 
 +(GrapeEmulator *) sharedInstance NS_SWIFT_NAME(shared());
 
--(void) insertCartridge:(NSURL *)url NS_SWIFT_NAME(insert(_:));
+-(void) insertCartridge:(NSURL *)url NS_SWIFT_NAME(insert(cartridge:));
+-(uint32_t*) icon:(NSURL *)url NS_SWIFT_NAME(icon(cartridge:));
 
--(uint32_t*) icon:(NSURL *)url;
-
+-(void) pause;
 -(void) start;
 -(void) stop;
+-(void) unpause;
 
--(BOOL) isPaused;
--(void) pause:(BOOL)pause;
+-(BOOL) isPaused NS_SWIFT_NAME(paused());
+-(BOOL) isRunning NS_SWIFT_NAME(running());
 
--(void) touchBegan:(CGPoint)point;
+-(void) touchBegan:(CGPoint)point NS_SWIFT_NAME(touchBegan(point:));
 -(void) touchEnded;
--(void) touchMoved:(CGPoint)point;
+-(void) touchMoved:(CGPoint)point NS_SWIFT_NAME(touchMoved(point:));
 
--(void) button:(uint32_t)button pressed:(BOOL)pressed;
+-(void) press:(uint32_t)button;
+-(void) release:(uint32_t)button;
 
--(BOOL) loadState;
--(BOOL) saveState;
-
--(void) load:(NSURL *)url;
--(void) save:(NSURL *)url;
-
--(void) updateSettings;
+-(void) load:(NSURL *)url NS_SWIFT_NAME(load(state:));
+-(void) save:(NSURL *)url NS_SWIFT_NAME(save(state:));
 @end
 
 NS_ASSUME_NONNULL_END

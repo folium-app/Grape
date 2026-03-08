@@ -7,19 +7,19 @@
 //
 
 #import "GrapeEmulator.h"
+#import "Grape-Swift.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "frontend/LAN_Socket.h"
+#include "melonDS/Config.h"
 #include "melonDS/Platform.h"
 #include "melonDS/NDS.h"
 #include "melonDS/SPU.h"
 #include "melonDS/GPU.h"
 #include "melonDS/AREngine.h"
 
-#include "melonDS/Config.h"
-
-#import "DirectoryManager.h"
 #include "SaveManager.h"
 
 #include <atomic>
@@ -27,6 +27,10 @@
 #include <fstream>
 #include <mutex>
 #include <vector>
+
+namespace SPI_Firmware {
+std::array<u8, 4> DNS{178, 62, 43, 212};
+}
 
 CVPixelBufferRef scaledPixelBufferMDS(CVPixelBufferRef pixelBuffer, CGSize size) {
     CIImage *ciImage = [CIImage imageWithCVPixelBuffer:pixelBuffer];
@@ -262,44 +266,44 @@ static void RGBtoYUV(uint8_t r, uint8_t g, uint8_t b, uint8_t& y, uint8_t& u, ui
 
 class NdsIcon
 {
-    public:
-        NdsIcon(std::string path, int fd = -1);
-
-        uint32_t *getIcon() { return icon; }
-
-    private:
-        uint32_t icon[32 * 32];
+public:
+    NdsIcon(std::string path, int fd = -1);
+    
+    uint32_t *getIcon() { return icon; }
+    
+private:
+    uint32_t icon[32 * 32];
 };
 
 NdsIcon::NdsIcon(std::string path, int fd)
 {
     // Attempt to open the ROM
     FILE *rom = (fd == -1) ? fopen(path.c_str(), "rb") : fdopen(fd, "rb");
-
+    
     // Create an empty icon if ROM loading failed
     if (!rom)
     {
         memset(icon, 0, 32 * 32 * sizeof(uint32_t));
         return;
     }
-
+    
     // Get the icon offset
     uint8_t offset[4];
     fseek(rom, 0x68, SEEK_SET);
     fread(offset, sizeof(uint8_t), 4, rom);
-
+    
     // Get the icon data
     uint8_t data[512];
     fseek(rom, U8TO32(offset, 0) + 0x20, SEEK_SET);
     fread(data, sizeof(uint8_t), 512, rom);
-
+    
     // Get the icon palette
     uint8_t palette[32];
     fseek(rom, U8TO32(offset, 0) + 0x220, SEEK_SET);
     fread(palette, sizeof(uint8_t), 32, rom);
-
+    
     fclose(rom);
-
+    
     // Get each pixel's 5-bit palette color and convert it to 8-bit
     uint32_t tiles[32 * 32];
     for (int i = 0; i < 32 * 32; i++)
@@ -311,7 +315,7 @@ NdsIcon::NdsIcon(std::string path, int fd)
         uint8_t b = ((color >> 10) & 0x1F) * 255 / 31;
         tiles[i] = (0xFF << 24) | (b << 16) | (g << 8) | r;
     }
-
+    
     // Rearrange the pixels from 8x8 tiles to a 32x32 icon
     for (int i = 0; i < 4; i++)
     {
@@ -325,9 +329,12 @@ NdsIcon::NdsIcon(std::string path, int fd)
 
 SDL_AudioDeviceID device;
 SDL_AudioStream* stream = nullptr;
-std::atomic<bool> paused;
+
+std::jthread thread;
+std::atomic<bool> paused, running;
 std::mutex mutex;
 std::condition_variable_any cv;
+uint32_t inputs;
 
 NSURL *saveURL;
 
@@ -346,7 +353,8 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
     return sharedInstance;
 }
 
--(void) insertCartridge:(NSURL *)url {
+
+-(void) insertCartridge:(NSURL *)url { // TODO: rewrite
     SDL_SetMainReady();
     SDL_InitSubSystem(SDL_INIT_AUDIO);
     
@@ -365,18 +373,20 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
     Config::Load();
     GPU::InitRenderer(0);
     
-    Config::BIOS7Path = [[sysdataDirectory() URLByAppendingPathComponent:@"bios7.bin"].path UTF8String];
-    Config::BIOS9Path = [[sysdataDirectory() URLByAppendingPathComponent:@"bios9.bin"].path UTF8String];
-    Config::FirmwarePath = [[sysdataDirectory() URLByAppendingPathComponent:@"firmware.bin"].path UTF8String];
+    auto sysdataDirectoryURL = GrapeCommon.sysdataDirectoryURL;
+    
+    Config::BIOS7Path = [[sysdataDirectoryURL URLByAppendingPathComponent:@"bios7.bin"].path UTF8String];
+    Config::BIOS9Path = [[sysdataDirectoryURL URLByAppendingPathComponent:@"bios9.bin"].path UTF8String];
+    Config::FirmwarePath = [[sysdataDirectoryURL URLByAppendingPathComponent:@"firmware.bin"].path UTF8String];
     
     BOOL (^fileExists)(NSURL *) = ^BOOL(NSURL *url) {
         return [[NSFileManager defaultManager] fileExistsAtPath:url.path];
     };
     
-    NSURL *bios7i = [sysdataDirectory() URLByAppendingPathComponent:@"bios7i.bin"];
-    NSURL *bios9i = [sysdataDirectory() URLByAppendingPathComponent:@"bios9i.bin"];
-    NSURL *firmwarei = [sysdataDirectory() URLByAppendingPathComponent:@"firmwarei.bin"];
-    NSURL *nandi = [sysdataDirectory() URLByAppendingPathComponent:@"nandi.bin"];
+    NSURL *bios7i = [sysdataDirectoryURL URLByAppendingPathComponent:@"bios7i.bin"];
+    NSURL *bios9i = [sysdataDirectoryURL URLByAppendingPathComponent:@"bios9i.bin"];
+    NSURL *firmwarei = [sysdataDirectoryURL URLByAppendingPathComponent:@"firmwarei.bin"];
+    NSURL *nandi = [sysdataDirectoryURL URLByAppendingPathComponent:@"nandi.bin"];
     
     if (fileExists(bios7i) && fileExists(bios9i) && fileExists(firmwarei) && fileExists(nandi)) {
         NDS::SetConsoleType([[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.35.dsiMode"] ? ConsoleType::ConsoleTypeDSi : ConsoleType::ConsoleTypeNDS);
@@ -389,13 +399,13 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
         NDS::SetConsoleType(ConsoleType::ConsoleTypeNDS);
     
     Config::DirectBoot = [[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.35.directBoot"];
-    Config::ExternalBIOSEnable = YES;
+    Config::ExternalBIOSEnable = [[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.35.externalBIOS"];
     
     NDS::Init();
     
     GPU::RenderSettings settings;
     settings.Soft_Threaded = YES;
-
+    
     GPU::SetRenderSettings(0, settings);
     
     NDS::Reset();
@@ -404,7 +414,7 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
     u8* savedata = nullptr;
     
     NSString* saveName = [NSString stringWithFormat:@"%@.sav", [[url URLByDeletingPathExtension] lastPathComponent]];
-    saveURL = [savesDirectory() URLByAppendingPathComponent:saveName];
+    saveURL = [GrapeCommon.savesDirectoryURL URLByAppendingPathComponent:saveName];
     
     std::string savename{[saveURL.path UTF8String]};
     std::string origsave = savename;
@@ -422,11 +432,10 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
         fclose(sav);
     }
     
-    _url = url;
     NSData *data = [NSData dataWithContentsOfURL:url];
     NDS::LoadCart((const u8*)data.bytes, (u32)data.length, savedata, savelen);
     if (Config::DirectBoot)
-        NDS::SetupDirectBoot([url.path UTF8String]);
+        NDS::SetupDirectBoot(std::string{[url.path UTF8String]});
     
     if (savedata)
         delete[] savedata;
@@ -435,65 +444,98 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
 }
 
 -(uint32_t*) icon:(NSURL *)url {
-    NdsIcon icon([url.path UTF8String]);
+    NdsIcon icon(std::string{[url.path UTF8String]});
     uint32_t* data = new uint32_t[32 * 32];
     memcpy(data, icon.getIcon(), 32 * 32 * sizeof(uint32_t));
     return data;
 }
 
--(void) start {
-    std::unique_lock lock(mutex);
-    cv.wait(lock, []() {
-        return !paused.load();
+
+-(void) pause {
+    paused.store(true);
+}
+
+-(void) start { // TODO: rewrite
+    thread = std::jthread([&](std::stop_token token) {
+        using namespace std::chrono;
+        
+        const auto frameDuration = duration<double>(1.0 / 60.0);
+        
+        while (!token.stop_requested()) {
+            {
+                std::unique_lock lock(mutex);
+                cv.wait(lock, token, []() {
+                    return !paused.load();
+                });
+                
+                if (token.stop_requested())
+                    break;
+            }
+            
+            auto frameStart = steady_clock::now();
+            
+            uint32_t _inputs = inputs;
+            uint32_t inputsMask = 0xFFF;
+            
+            uint16_t sanitizedInputs = inputsMask ^ _inputs;
+            NDS::SetKeyMask(sanitizedInputs);
+            
+            NDS::RunFrame();
+            
+            {
+                static int16_t buf[0x1000];
+                u32 availableBytes = SPU::GetOutputSize();
+                availableBytes = MAX(availableBytes, (u32)(sizeof(buf) / (2 * sizeof(int16_t))));
+                
+                int samples = SPU::ReadOutput(buf, availableBytes);
+                
+                SDL_PutAudioStreamData(stream, buf, samples * 4);
+            }
+            
+            if (auto callback = [[GrapeEmulator sharedInstance] videoCallback])
+                callback(GPU::Framebuffer[GPU::FrontBuffer][0], GPU::Framebuffer[GPU::FrontBuffer][1]);
+            
+            // Limit FPS
+            auto frameEnd = steady_clock::now();
+            auto elapsed = frameEnd - frameStart;
+            if (elapsed < frameDuration)
+                std::this_thread::sleep_for(frameDuration - elapsed);
+        }
     });
-    
-    uint32_t _inputs = inputs;
-    uint32_t inputsMask = 0xFFF;
-    
-    uint16_t sanitizedInputs = inputsMask ^ _inputs;
-    NDS::SetKeyMask(sanitizedInputs);
-    
-    NDS::RunFrame();
-    
-    {
-        static int16_t buf[0x1000];
-        u32 availableBytes = SPU::GetOutputSize();
-        availableBytes = MAX(availableBytes, (u32)(sizeof(buf) / (2 * sizeof(int16_t))));
-        
-        int samples = SPU::ReadOutput(buf, availableBytes);
-        
-        SDL_PutAudioStreamData(stream, buf, samples * 4);
-    }
-    
-    if (auto buffers = [[GrapeEmulator sharedInstance] fbs])
-        buffers(GPU::Framebuffer[GPU::FrontBuffer][0], GPU::Framebuffer[GPU::FrontBuffer][1]);
 }
 
 -(void) stop {
     NDS::Stop();
+    NDS::DeInit();
+    
+    thread.request_stop();
+    if (thread.joinable())
+        thread.join();
     
     paused.store(false);
+    running.store(false);
 }
+
+-(void) unpause {
+    paused.store(false);
+    cv.notify_all();
+}
+
 
 -(BOOL) isPaused {
     return paused.load();
 }
 
--(void) pause:(BOOL)pause {
-    if (pause)
-        paused.store(true);
-    else {
-        paused.store(false);
-        cv.notify_all();
-    }
+-(BOOL) isRunning {
+    return running.load();
 }
+
 
 -(void) touchBegan:(CGPoint)point {
     NDS::TouchScreen(point.x, point.y);
 }
 
 -(void) touchEnded {
-    NDS::TouchScreen(0, 0);
     NDS::ReleaseScreen();
 }
 
@@ -501,61 +543,28 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
     NDS::TouchScreen(point.x, point.y);
 }
 
--(void) button:(uint32_t)button pressed:(BOOL)pressed {
-    if (pressed)
-        inputs |= button;
-    else
-        inputs &= ~button;
+
+-(void) press:(uint32_t)button {
+    inputs |= button;
 }
 
--(BOOL) loadState {
-    NSURL *directory = [[[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] firstObject] URLByAppendingPathComponent:@"Grape"];
-    NSString *path = [NSString stringWithFormat:@"%@/states/%@.state", [directory path], [[_url URLByDeletingPathExtension] lastPathComponent]];
-    
-    NSURL *url = [NSURL fileURLWithPath:path];
-    
-    if([[NSFileManager defaultManager] fileExistsAtPath:path]) {
-        Savestate* saveState = new Savestate(std::string{[url.path UTF8String]}, false);
-        auto result = NDS::DoSavestate(saveState);
-        delete saveState;
-        return result;
-    } else {
-        return NO;
-    }
+-(void) release:(uint32_t)button {
+    inputs &= ~button;
 }
 
--(BOOL) saveState {
-    NSURL *directory = [[[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] firstObject] URLByAppendingPathComponent:@"Grape"];
-    NSString *path = [NSString stringWithFormat:@"%@/states/%@.state", [directory path], [[_url URLByDeletingPathExtension] lastPathComponent]];
-    
-    NSURL *url = [NSURL fileURLWithPath:path];
-    
-    Savestate* saveState = new Savestate(std::string{[url.path UTF8String]}, true);
-    auto result = NDS::DoSavestate(saveState);
-    delete saveState;
-    return result;
-}
 
 -(void) load:(NSURL *)url {
     if([[NSFileManager defaultManager] fileExistsAtPath:url.path]) {
         Savestate* saveState = new Savestate(std::string{[url.path UTF8String]}, false);
-        auto result = NDS::DoSavestate(saveState);
+        NDS::DoSavestate(saveState);
         delete saveState;
     }
 }
 
 -(void) save:(NSURL *)url {
     Savestate* saveState = new Savestate(std::string{[url.path UTF8String]}, true);
-    auto result = NDS::DoSavestate(saveState);
+    NDS::DoSavestate(saveState);
     delete saveState;
-}
-
--(void) updateSettings {
-    NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
-    
-    Config::DirectBoot = [userDefaults boolForKey:@"grape.v1.35.directBoot"];
-    
-    NDS::SetConsoleType([userDefaults boolForKey:@"grape.v1.35.dsiMode"] ? ConsoleType::ConsoleTypeDSi : ConsoleType::ConsoleTypeNDS);
 }
 @end
 
@@ -564,390 +573,391 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
 // Taken from Delta
 namespace Platform
 {
-    int IPCInstanceID;
+int IPCInstanceID;
 
 void StopEmu() {}
 
-    int InstanceID()
+int InstanceID()
+{
+    return IPCInstanceID;
+}
+
+std::string InstanceFileSuffix()
+{
+    int inst = IPCInstanceID;
+    if (inst == 0) return "";
+    
+    char suffix[16] = {0};
+    snprintf(suffix, 15, ".%d", inst+1);
+    return suffix;
+}
+
+int GetConfigInt(ConfigEntry entry)
+{
+    const int imgsizes[] = {0, 256, 512, 1024, 2048, 4096};
+    
+    switch (entry)
     {
-        return IPCInstanceID;
-    }
-
-    std::string InstanceFileSuffix()
-    {
-        int inst = IPCInstanceID;
-        if (inst == 0) return "";
-
-        char suffix[16] = {0};
-        snprintf(suffix, 15, ".%d", inst+1);
-        return suffix;
-    }
-
-    int GetConfigInt(ConfigEntry entry)
-    {
-        const int imgsizes[] = {0, 256, 512, 1024, 2048, 4096};
-
-        switch (entry)
-        {
-            default: break;
-    #ifdef JIT_ENABLED
+        default: break;
+#ifdef JIT_ENABLED
         case JIT_MaxBlockSize: return Config::JIT_MaxBlockSize;
-    #endif
-
+#endif
+            
         case DLDI_ImageSize: return imgsizes[Config::DLDISize];
-
+            
         case DSiSD_ImageSize: return imgsizes[Config::DSiSDSize];
-
+            
         case Firm_Language: return Config::FirmwareLanguage;
         case Firm_BirthdayMonth: return Config::FirmwareBirthdayMonth;
         case Firm_BirthdayDay: return Config::FirmwareBirthdayDay;
         case Firm_Color: return Config::FirmwareFavouriteColour;
-
+            
         case AudioBitrate: return Config::AudioBitrate;
-        }
-
-        return 0;
     }
+    
+    return 0;
+}
 
-    bool GetConfigBool(ConfigEntry entry)
+bool GetConfigBool(ConfigEntry entry)
+{
+    switch (entry)
     {
-        switch (entry)
-        {
-            default: break;
-    #ifdef JIT_ENABLED
+        default: break;
+#ifdef JIT_ENABLED
         case JIT_Enable: return Config::JIT_Enable != 0;
         case JIT_LiteralOptimizations: return Config::JIT_LiteralOptimisations != 0;
         case JIT_BranchOptimizations: return Config::JIT_BranchOptimisations != 0;
         case JIT_FastMemory: return Config::JIT_FastMemory != 0;
-    #endif
-
+#endif
+            
         case ExternalBIOSEnable: return Config::ExternalBIOSEnable != 0;
-
+            
         case DLDI_Enable: return Config::DLDIEnable != 0;
         case DLDI_ReadOnly: return Config::DLDIReadOnly != 0;
         case DLDI_FolderSync: return Config::DLDIFolderSync != 0;
-
+            
         case DSiSD_Enable: return Config::DSiSDEnable != 0;
         case DSiSD_ReadOnly: return Config::DSiSDReadOnly != 0;
         case DSiSD_FolderSync: return Config::DSiSDFolderSync != 0;
-
+            
         case Firm_OverrideSettings: return Config::FirmwareOverrideSettings != 0;
-        }
-
-        return false;
     }
+    
+    return false;
+}
 
-    std::string GetConfigString(ConfigEntry entry)
+std::string GetConfigString(ConfigEntry entry)
+{
+    switch (entry)
     {
-        switch (entry)
-        {
-            default: break;
+        default: break;
         case BIOS9Path: return Config::BIOS9Path;
         case BIOS7Path: return Config::BIOS7Path;
         case FirmwarePath: return Config::FirmwarePath;
-
+            
         case DSi_BIOS9Path: return Config::DSiBIOS9Path;
         case DSi_BIOS7Path: return Config::DSiBIOS7Path;
         case DSi_FirmwarePath: return Config::DSiFirmwarePath;
         case DSi_NANDPath: return Config::DSiNANDPath;
-
+            
         case DLDI_ImagePath: return Config::DLDISDPath;
         case DLDI_FolderPath: return Config::DLDIFolderPath;
-
+            
         case DSiSD_ImagePath: return Config::DSiSDPath;
         case DSiSD_FolderPath: return Config::DSiSDFolderPath;
-
+            
         case Firm_Username: return Config::FirmwareUsername;
         case Firm_Message: return Config::FirmwareMessage;
-        }
-
-        return "";
     }
+    
+    return "";
+}
 
-    bool GetConfigArray(ConfigEntry entry, void* data)
+bool GetConfigArray(ConfigEntry entry, void* data)
+{
+    switch (entry)
     {
-        switch (entry)
-        {
-            default: break;
+        default: break;
         case Firm_MAC:
+        {
+            std::string& mac_in = Config::FirmwareMAC;
+            u8* mac_out = (u8*)data;
+            
+            int o = 0;
+            u8 tmp = 0;
+            for (int i = 0; i < 18; i++)
             {
-                std::string& mac_in = Config::FirmwareMAC;
-                u8* mac_out = (u8*)data;
-
-                int o = 0;
-                u8 tmp = 0;
-                for (int i = 0; i < 18; i++)
-                {
-                    char c = mac_in[i];
-                    if (c == '\0') break;
-
-                    int n;
-                    if      (c >= '0' && c <= '9') n = c - '0';
-                    else if (c >= 'a' && c <= 'f') n = c - 'a' + 10;
-                    else if (c >= 'A' && c <= 'F') n = c - 'A' + 10;
-                    else continue;
-
-                    if (!(o & 1))
-                        tmp = n;
-                    else
-                        mac_out[o >> 1] = n | (tmp << 4);
-
-                    o++;
-                    if (o >= 12) return true;
-                }
-            }
-            return false;
-        }
-
-        return false;
-    }
-    
-    FILE* OpenFile(std::string path, std::string mode, bool mustexist)
-    {
-        FILE* ret;
-        
-        if (mustexist)
-        {
-            ret = fopen(path.c_str(), "rb");
-            if (ret) ret = freopen(path.c_str(), mode.c_str(), ret);
-        }
-        else
-            ret = fopen(path.c_str(), mode.c_str());
-        
-        NSLog(@"file = %s (%d)", path.c_str(), ret == nullptr);
-        
-        return ret;
-    }
-    
-    FILE* OpenLocalFile(std::string path, std::string mode)
-    {
-        NSURL *coreDirectoryURL = [[[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] firstObject] URLByAppendingPathComponent:@"Grape"];
-        NSURL *relativeURL = [coreDirectoryURL URLByAppendingPathComponent:@(path.c_str())];
+                char c = mac_in[i];
+                if (c == '\0') break;
                 
-        NSURL *fileURL = nil;
-        if ([[NSFileManager defaultManager] fileExistsAtPath:relativeURL.path])
-        {
-            fileURL = relativeURL;
+                int n;
+                if      (c >= '0' && c <= '9') n = c - '0';
+                else if (c >= 'a' && c <= 'f') n = c - 'a' + 10;
+                else if (c >= 'A' && c <= 'F') n = c - 'A' + 10;
+                else continue;
+                
+                if (!(o & 1))
+                    tmp = n;
+                else
+                    mac_out[o >> 1] = n | (tmp << 4);
+                
+                o++;
+                if (o >= 12) return true;
+            }
         }
+            return false;
+    }
+    
+    return false;
+}
+
+FILE* OpenFile(std::string path, std::string mode, bool mustexist)
+{
+    FILE* ret;
+    
+    if (mustexist)
+    {
+        ret = fopen(path.c_str(), "rb");
+        if (ret) ret = freopen(path.c_str(), mode.c_str(), ret);
+    }
+    else
+        ret = fopen(path.c_str(), mode.c_str());
+    
+    return ret;
+}
+
+FILE* OpenLocalFile(std::string path, std::string mode)
+{
+    NSURL *relativeURL = [GrapeCommon.grapeDirectoryURL URLByAppendingPathComponent:@(path.c_str())];
+    
+    NSURL *fileURL = nil;
+    if ([[NSFileManager defaultManager] fileExistsAtPath:relativeURL.path] || path.find(".bak") != std::string::npos)
+    {
+        fileURL = relativeURL;
+    }
+    else
+    {
+        if (path.find("wfcsettings") != std::string::npos)
+            fileURL = [GrapeCommon.sysdataDirectoryURL URLByAppendingPathComponent:@(path.c_str())];
         else
-        {
             fileURL = [NSURL fileURLWithPath:@(path.c_str())];
-        }
-        
-        return OpenFile(fileURL.fileSystemRepresentation, mode.c_str());
     }
     
-    Thread* Thread_Create(std::function<void()> func)
-    {
-        NSThread *thread = [[NSThread alloc] initWithBlock:^{
-            func();
-        }];
-        
-        thread.name = @"MelonDS - Rendering";
-        thread.qualityOfService = NSQualityOfServiceUserInitiated;
-        
-        [thread start];
-        
-        return (Thread *)CFBridgingRetain(thread);
-    }
-    
-    void Thread_Free(Thread *thread)
-    {
-        NSThread *nsThread = (NSThread *)CFBridgingRelease(thread);
-        [nsThread cancel];
-    }
-    
-    void Thread_Wait(Thread *thread)
-    {
-        NSThread *nsThread = (__bridge NSThread *)thread;
-        while (nsThread.isExecuting)
-        {
-            continue;
-        }
-    }
-    
-    Semaphore *Semaphore_Create()
-    {
-        dispatch_semaphore_t dispatchSemaphore = dispatch_semaphore_create(0);
-        return (Semaphore *)CFBridgingRetain(dispatchSemaphore);
-    }
-    
-    void Semaphore_Free(Semaphore *semaphore)
-    {
-        CFRelease(semaphore);
-    }
-    
-    void Semaphore_Reset(Semaphore *semaphore)
-    {
-        dispatch_semaphore_t dispatchSemaphore = (__bridge dispatch_semaphore_t)semaphore;
-        while (dispatch_semaphore_wait(dispatchSemaphore, DISPATCH_TIME_NOW) == 0)
-        {
-            continue;
-        }
-    }
-    
-    void Semaphore_Wait(Semaphore *semaphore)
-    {
-        dispatch_semaphore_t dispatchSemaphore = (__bridge dispatch_semaphore_t)semaphore;
-        dispatch_semaphore_wait(dispatchSemaphore, DISPATCH_TIME_FOREVER);
-    }
+    return OpenFile(fileURL.fileSystemRepresentation, mode.c_str());
+}
 
-    void Semaphore_Post(Semaphore *semaphore, int count)
-    {
-        dispatch_semaphore_t dispatchSemaphore = (__bridge dispatch_semaphore_t)semaphore;
-        for (int i = 0; i < count; i++)
-        {
-            dispatch_semaphore_signal(dispatchSemaphore);
-        }
-    }
-
-    Mutex *Mutex_Create()
-    {
-        // NSLock is too slow for real-time audio, so use pthread_mutex_t directly.
-        
-        pthread_mutex_t *mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-        pthread_mutex_init(mutex, NULL);
-        return (Mutex *)mutex;
-    }
-
-    void Mutex_Free(Mutex *m)
-    {
-        pthread_mutex_t *mutex = (pthread_mutex_t *)m;
-        pthread_mutex_destroy(mutex);
-        free(mutex);
-    }
-
-    void Mutex_Lock(Mutex *m)
-    {
-        pthread_mutex_t *mutex = (pthread_mutex_t *)m;
-        pthread_mutex_lock(mutex);
-    }
-
-    void Mutex_Unlock(Mutex *m)
-    {
-        pthread_mutex_t *mutex = (pthread_mutex_t *)m;
-        pthread_mutex_unlock(mutex);
-    }
+Thread* Thread_Create(std::function<void()> func)
+{
+    NSThread *thread = [[NSThread alloc] initWithBlock:^{
+        func();
+    }];
     
-    void *GL_GetProcAddress(const char* proc)
-    {
-        return NULL;
-    }
+    thread.name = @"melonDS - Rendering";
+    thread.qualityOfService = NSQualityOfServiceUserInitiated;
     
-    bool MP_Init()
+    [thread start];
+    
+    return (Thread *)CFBridgingRetain(thread);
+}
+
+void Thread_Free(Thread *thread)
+{
+    NSThread *nsThread = (NSThread *)CFBridgingRelease(thread);
+    [nsThread cancel];
+}
+
+void Thread_Wait(Thread *thread)
+{
+    NSThread *nsThread = (__bridge NSThread *)thread;
+    while (nsThread.isExecuting)
     {
+        continue;
+    }
+}
+
+Semaphore *Semaphore_Create()
+{
+    dispatch_semaphore_t dispatchSemaphore = dispatch_semaphore_create(0);
+    return (Semaphore *)CFBridgingRetain(dispatchSemaphore);
+}
+
+void Semaphore_Free(Semaphore *semaphore)
+{
+    CFRelease(semaphore);
+}
+
+void Semaphore_Reset(Semaphore *semaphore)
+{
+    dispatch_semaphore_t dispatchSemaphore = (__bridge dispatch_semaphore_t)semaphore;
+    while (dispatch_semaphore_wait(dispatchSemaphore, DISPATCH_TIME_NOW) == 0)
+    {
+        continue;
+    }
+}
+
+void Semaphore_Wait(Semaphore *semaphore)
+{
+    dispatch_semaphore_t dispatchSemaphore = (__bridge dispatch_semaphore_t)semaphore;
+    dispatch_semaphore_wait(dispatchSemaphore, DISPATCH_TIME_FOREVER);
+}
+
+void Semaphore_Post(Semaphore *semaphore, int count)
+{
+    dispatch_semaphore_t dispatchSemaphore = (__bridge dispatch_semaphore_t)semaphore;
+    for (int i = 0; i < count; i++)
+    {
+        dispatch_semaphore_signal(dispatchSemaphore);
+    }
+}
+
+Mutex *Mutex_Create()
+{
+    // NSLock is too slow for real-time audio, so use pthread_mutex_t directly.
+    
+    pthread_mutex_t *mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+    pthread_mutex_init(mutex, NULL);
+    return (Mutex *)mutex;
+}
+
+void Mutex_Free(Mutex *m)
+{
+    pthread_mutex_t *mutex = (pthread_mutex_t *)m;
+    pthread_mutex_destroy(mutex);
+    free(mutex);
+}
+
+void Mutex_Lock(Mutex *m)
+{
+    pthread_mutex_t *mutex = (pthread_mutex_t *)m;
+    pthread_mutex_lock(mutex);
+}
+
+void Mutex_Unlock(Mutex *m)
+{
+    pthread_mutex_t *mutex = (pthread_mutex_t *)m;
+    pthread_mutex_unlock(mutex);
+}
+
+void *GL_GetProcAddress(const char* proc)
+{
+    return NULL;
+}
+
+bool MP_Init()
+{
+    return false;
+}
+
+void MP_DeInit()
+{
+}
+
+void MP_Begin()
+{
+}
+
+void MP_End()
+{
+}
+
+int MP_SendPacket(u8* data, int len, u64 timestamp)
+{
+    return 0;
+}
+
+int MP_RecvPacket(u8* data, u64* timestamp)
+{
+    return 0;
+}
+
+int MP_SendCmd(u8* data, int len, u64 timestamp)
+{
+    return 0;
+}
+
+int MP_SendReply(u8* data, int len, u64 timestamp, u16 aid)
+{
+    return 0;
+}
+
+int MP_SendAck(u8* data, int len, u64 timestamp)
+{
+    return 0;
+}
+
+int MP_RecvHostPacket(u8* data, u64* timestamp)
+{
+    return 0;
+}
+
+u16 MP_RecvReplies(u8* data, u64 timestamp, u16 aidmask)
+{
+    return 0;
+}
+
+bool LAN_Init() {
+    if (!LAN_Socket::Init())
         return false;
-    }
+    return true;
+}
+
+void LAN_DeInit()
+{
+    LAN_Socket::DeInit();
+}
+
+int LAN_SendPacket(u8* data, int len)
+{
+    return LAN_Socket::SendPacket(data, len);
+}
+
+int LAN_RecvPacket(u8* data)
+{
+    return LAN_Socket::RecvPacket(data);
+}
+
+void Mic_Prepare()
+{
+    //if (![MelonDSEmulatorBridge.sharedBridge isMicrophoneEnabled] || [MelonDSEmulatorBridge.sharedBridge.audioEngine isRunning])
+    //{
+    //    return;
+    //}
     
-    void MP_DeInit()
-    {
-    }
+    //NSError *error = nil;
+    //if (![MelonDSEmulatorBridge.sharedBridge.audioEngine startAndReturnError:&error])
+    //{
+    //    NSLog(@"Failed to start listening to microphone. %@", error);
+    //}
+}
 
-    void MP_Begin()
-    {
-    }
+void WriteNDSSave(const u8* savebytes, u32 savelen, u32 writeoffset, u32 writelen) {
+    [[NSData dataWithBytes:savebytes length:savelen] writeToFile:saveURL.path atomically:YES];
+}
 
-    void MP_End()
-    {
-    }
+void WriteGBASave(const u8* savebytes, u32 savelen, u32 writeoffset, u32 writelen) {
+    [[NSData dataWithBytes:savebytes length:savelen] writeToFile:saveURL.path atomically:YES];
+}
+
+void Camera_Start(int num)
+{
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [[Camera sharedInstance] start];
+    });
+}
+
+void Camera_Stop(int num)
+{
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [[Camera sharedInstance] stop];
+    });
+}
+
+void Camera_CaptureFrame(int num, u32* frame, int width, int height, bool yuv)
+{
+    [[Camera sharedInstance] resolution:CGSizeMake(width, height)];
+    [[Camera sharedInstance] yuv:yuv];
     
-    int MP_SendPacket(u8* data, int len, u64 timestamp)
-    {
-        return 0;
-    }
-    
-    int MP_RecvPacket(u8* data, u64* timestamp)
-    {
-        return 0;
-    }
-
-    int MP_SendCmd(u8* data, int len, u64 timestamp)
-    {
-        return 0;
-    }
-
-    int MP_SendReply(u8* data, int len, u64 timestamp, u16 aid)
-    {
-        return 0;
-    }
-
-    int MP_SendAck(u8* data, int len, u64 timestamp)
-    {
-        return 0;
-    }
-
-    int MP_RecvHostPacket(u8* data, u64* timestamp)
-    {
-        return 0;
-    }
-
-    u16 MP_RecvReplies(u8* data, u64 timestamp, u16 aidmask)
-    {
-        return 0;
-    }
-    
-    bool LAN_Init()
-    {
-        return false;
-    }
-    
-    void LAN_DeInit()
-    {
-    }
-    
-    int LAN_SendPacket(u8* data, int len)
-    {
-        return 0;
-    }
-    
-    int LAN_RecvPacket(u8* data)
-    {
-        return 0;
-    }
-
-    void Mic_Prepare()
-    {
-        //if (![MelonDSEmulatorBridge.sharedBridge isMicrophoneEnabled] || [MelonDSEmulatorBridge.sharedBridge.audioEngine isRunning])
-        //{
-        //    return;
-        //}
-        
-        //NSError *error = nil;
-        //if (![MelonDSEmulatorBridge.sharedBridge.audioEngine startAndReturnError:&error])
-        //{
-        //    NSLog(@"Failed to start listening to microphone. %@", error);
-        //}
-    }
-
-    void WriteNDSSave(const u8* savebytes, u32 savelen, u32 writeoffset, u32 writelen) {
-        [[NSData dataWithBytes:savebytes length:savelen] writeToFile:saveURL.path atomically:YES];
-    }
-
-    void WriteGBASave(const u8* savebytes, u32 savelen, u32 writeoffset, u32 writelen) {
-        [[NSData dataWithBytes:savebytes length:savelen] writeToFile:saveURL.path atomically:YES];
-    }
-
-    void Camera_Start(int num)
-    {
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            [[Camera sharedInstance] start];
-        });
-    }
-
-    void Camera_Stop(int num)
-    {
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            [[Camera sharedInstance] stop];
-        });
-    }
-
-    void Camera_CaptureFrame(int num, u32* frame, int width, int height, bool yuv)
-    {
-        NSLog(@"%s, %i, %i, %i", __FUNCTION__, width, height, yuv);
-        [[Camera sharedInstance] resolution:CGSizeMake(width, height)];
-        [[Camera sharedInstance] yuv:yuv];
-        
-        auto data = [[Camera sharedInstance] frame];
-        *frame = *data.data();
-    }
+    auto data = [[Camera sharedInstance] frame];
+    *frame = *data.data();
+}
 }
