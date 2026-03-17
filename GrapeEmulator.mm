@@ -365,7 +365,22 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
     spec.freq = 32768;
     
     device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
-    stream = SDL_OpenAudioDeviceStream(device, &spec, nil, nil);
+    stream = SDL_OpenAudioDeviceStream(device, &spec, [](void* data, SDL_AudioStream* stream, int add, int total) {
+        (void)data;
+        
+        if (add <= 0)
+            return;
+        
+        std::vector<s16> buf(0x1000);
+        std::fill(buf.begin(), buf.end(), 0);
+        
+        u32 availableBytes = SPU::GetOutputSize();
+        availableBytes = MAX(availableBytes, (u32)(buf.size() / (2 * sizeof(int16_t))));
+        
+        int samples = SPU::ReadOutput(buf.data(), availableBytes);
+        
+        SDL_PutAudioStreamData(stream, buf.data(), samples * 4);
+    }, nil);
     SDL_ResumeAudioStreamDevice(stream);
     
     inputs = 0;
@@ -389,7 +404,7 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
     NSURL *nandi = [sysdataDirectoryURL URLByAppendingPathComponent:@"nandi.bin"];
     
     if (fileExists(bios7i) && fileExists(bios9i) && fileExists(firmwarei) && fileExists(nandi)) {
-        NDS::SetConsoleType([[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.35.dsiMode"] ? ConsoleType::ConsoleTypeDSi : ConsoleType::ConsoleTypeNDS);
+        NDS::SetConsoleType([[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.38.dsiMode"] ? ConsoleType::ConsoleTypeDSi : ConsoleType::ConsoleTypeNDS);
         
         Config::DSiBIOS7Path = [bios7i.path UTF8String];
         Config::DSiBIOS9Path = [bios9i.path UTF8String];
@@ -398,8 +413,8 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
     } else
         NDS::SetConsoleType(ConsoleType::ConsoleTypeNDS);
     
-    Config::DirectBoot = [[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.35.directBoot"];
-    Config::ExternalBIOSEnable = [[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.35.externalBIOS"];
+    Config::DirectBoot = [[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.38.directBoot"];
+    Config::ExternalBIOSEnable = [[NSUserDefaults standardUserDefaults] boolForKey:@"grape.v1.38.externalBIOS"];
     
     NDS::Init();
     
@@ -481,16 +496,6 @@ typedef NS_ENUM(NSUInteger, ConsoleType) {
             NDS::SetKeyMask(sanitizedInputs);
             
             NDS::RunFrame();
-            
-            {
-                static int16_t buf[0x1000];
-                u32 availableBytes = SPU::GetOutputSize();
-                availableBytes = MAX(availableBytes, (u32)(sizeof(buf) / (2 * sizeof(int16_t))));
-                
-                int samples = SPU::ReadOutput(buf, availableBytes);
-                
-                SDL_PutAudioStreamData(stream, buf, samples * 4);
-            }
             
             if (auto callback = [[GrapeEmulator sharedInstance] videoCallback])
                 callback(GPU::Framebuffer[GPU::FrontBuffer][0], GPU::Framebuffer[GPU::FrontBuffer][1]);
